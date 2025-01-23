@@ -2,7 +2,7 @@ import pygame
 
 pygame.init()
 
-fps_font = pygame.font.Font("SairaCondensed-Light.ttf", 24)
+fps_font = pygame.font.Font("data/fonts/SairaCondensed-Light.ttf", 24)
 
 class ScreenObject:
     def __init__(self, width, height):

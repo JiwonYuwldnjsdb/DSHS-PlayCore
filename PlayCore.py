@@ -76,8 +76,8 @@ class PlayCoreMenu(ScreenObject):
         ]
         self.tile_rects = []
         self.hovered_tile_index = None
-        self.fontH1 = pygame.font.Font("SairaCondensed-Light.ttf", 48)
-        self.fontP = pygame.font.Font("SairaCondensed-Light.ttf", 24)
+        self.fontH1 = pygame.font.Font("data/fonts/SairaCondensed-Light.ttf", 48)
+        self.fontP = pygame.font.Font("data/fonts/SairaCondensed-Light.ttf", 24)
         self.layout_tiles()
 
         # Floating squares

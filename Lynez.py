@@ -380,13 +380,13 @@ class LynezMainScreen(ScreenObject):
         
         self.show_fps = show_fps
         
-        self.h1 = pygame.font.Font("SairaCondensed-Light.ttf", int(height/15))
+        self.h1 = pygame.font.Font("data/fonts/SairaCondensed-Light.ttf", int(height/15))
         self.h1_size = self.h1.size("")
         
-        self.p = pygame.font.Font("SairaCondensed-Light.ttf", int(height/30))
+        self.p = pygame.font.Font("data/fonts/SairaCondensed-Light.ttf", int(height/30))
         self.p_size = self.p.size("")
         
-        self.psmall = pygame.font.Font("SairaCondensed-Light.ttf", int(height/45))
+        self.psmall = pygame.font.Font("data/fonts/SairaCondensed-Light.ttf", int(height/45))
         self.psmall_size = self.psmall.size("")
         
         ### file data ###
@@ -838,7 +838,7 @@ class LynezLoadingScreen(ScreenObject):
         surface = pygame.Surface((self.width, self.height))
         surface.fill((26, 33, 46))
 
-        title_font = pygame.font.Font("SairaCondensed-Light.ttf", int(self.height // 20))
+        title_font = pygame.font.Font("data/fonts/SairaCondensed-Light.ttf", int(self.height // 20))
         title_text = title_font.render("Lynez", True, self.white)
         
         title_text_rect = title_text.get_rect()
