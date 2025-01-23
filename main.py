@@ -2,11 +2,11 @@ import pygame
 import sys
 from PlayCoreLibraries import fade_out
 
-import PlayCore, Starship
+import PlayCore, Lynez
 
 def main():
     pygame.init()
-    WIDTH, HEIGHT = 1280, 720   
+    WIDTH, HEIGHT = 1280, 800   
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     pygame.display.set_caption("DSHS PlayCore")
     
@@ -15,7 +15,8 @@ def main():
     curr_screen_idx = 0
     
     games = {
-        "Starship" : 1
+        0:0,
+        "Lynez" : 1
     }
     
     """
@@ -35,9 +36,14 @@ def main():
             fade_out(screen, curr_screen_surface, WIDTH, HEIGHT)
         
         elif curr_screen_idx == 1:
-            curr_screen = Starship.StarshipScreen(WIDTH,HEIGHT)
+            curr_screen = Lynez.LynezScreen(WIDTH, HEIGHT)
             
-            curr_screen.loop(screen)
+            next_screen, curr_screen_surface = curr_screen.loop(screen)
+            
+            curr_screen_idx = games[next_screen]
+            
+            pygame.time.wait(500)
+            fade_out(screen, curr_screen_surface, WIDTH, HEIGHT)
     
     pygame.quit()
     sys.exit()

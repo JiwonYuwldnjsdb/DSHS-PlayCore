@@ -478,7 +478,7 @@ class StarshipMainScreen(ScreenObject):
         self.margin_x = self.height * 1/7
         self.margin_y = self.height * 2/7
         
-        self.height_font = pygame.font.Font("SairaCondensed-Light.ttf", int(height/30))
+        
         
         img_title = pygame.image.load("imgs/Starship/main_menu_title.png").convert_alpha()
         self.img_title = pygame.transform.smoothscale(
@@ -919,7 +919,7 @@ class StarshipScreen(ScreenObject):
 
 if __name__ == "__main__":
     pygame.init()
-    WIDTH, HEIGHT = 1280, 720
+    WIDTH, HEIGHT = 1280, 800
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     pygame.display.set_caption("Starship Demo with 3 Asteroid Styles")
 

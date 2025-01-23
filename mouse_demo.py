@@ -65,6 +65,31 @@ alpha = 0.2  # Smoothing factor for EMA
 # 8. Initialize MediaPipe Hands
 # ==========================
 
+def angle_between_three_points(A, B, C):
+    A = (A.x, A.y)
+    B = (B.x, B.y)
+    C = (C.x, C.y)
+    
+    BA = (A[0] - B[0], A[1] - B[1])
+    BC = (C[0] - B[0], C[1] - B[1])
+
+    dot_product = BA[0] * BC[0] + BA[1] * BC[1]
+
+    mag_BA = math.sqrt(BA[0]**2 + BA[1]**2)
+    mag_BC = math.sqrt(BC[0]**2 + BC[1]**2)
+
+    if mag_BA == 0 or mag_BC == 0:
+        return None
+
+    cos_angle = dot_product / (mag_BA * mag_BC)
+
+    cos_angle = max(min(cos_angle, 1.0), -1.0)
+
+    angle_radians = math.acos(cos_angle)
+    angle_degrees = math.degrees(angle_radians)
+
+    return angle_degrees
+
 with mp_hands.Hands(
     static_image_mode=False,
     max_num_hands=1,  # Track only one hand
@@ -97,18 +122,16 @@ with mp_hands.Hands(
 
             # Simple thumb extension check based on x-coordinates
             # This works for right hand; invert comparison for left hand
-            distance = math.hypot(hand_landmarks.landmark[8].x - hand_landmarks.landmark[12].x,
-                                        hand_landmarks.landmark[8].y - hand_landmarks.landmark[12].y)
-            print(distance)
+            
             # ==========================
             # Click Logic: Pinch Gesture
             # ==========================
             
             # Perform click when thumb is not extended and other fingers are folded
-            # if not thumb_extended:
-            #     pyautogui.mouseDown()
-            # else:
-            #     pyautogui.mouseUp()
+            if angle_between_three_points(hand_landmarks.landmark[8], hand_landmarks.landmark[5], hand_landmarks.landmark[12]) < 10:
+                pyautogui.mouseDown()
+            else:
+                pyautogui.mouseUp()
 
             # ==========================
             # Mouse Movement Based on Index Finger

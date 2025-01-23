@@ -69,7 +69,7 @@ class PlayCoreMenu(ScreenObject):
 
         self.tiles = [
             {"title": "Quick tips", "color": (20, 50, 100)},
-            {"title": "Starship",     "color": (40, 80, 130)},
+            {"title": "Lynez",     "color": (40, 80, 130)},
             {"title": "Game 4",     "color": (40, 80, 130)},
             {"title": "Game 2",     "color": (40, 80, 130)},
             {"title": "Game 3",     "color": (40, 80, 130)},
