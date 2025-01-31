@@ -703,7 +703,7 @@ class GameScreen(ScreenObject):
         )
     
     def reset(self):
-        self.player.hp = 1
+        self.player.hp = 5
         self.wave = 0
         self.point = 0
         self.ghosts.clear()
@@ -934,8 +934,6 @@ class GameScreen(ScreenObject):
             text_rect = wave_text.get_rect()
             text_rect.topright = (screen.get_width() - self.width/40, self.width/110)  # 20px padding from the right
             screen.blit(wave_text, text_rect)
-            
-            blit_fps(screen, clock)
             
             pygame.display.flip()
             frame_cnt += 1
@@ -1283,6 +1281,6 @@ if __name__ == "__main__":
 
     # 최상위 스크린 실행
     main_screen = MagicCatAcademyScreen(WIDTH, HEIGHT, show_fps=True)
-    main_screen.loop(screen)
+    print(main_screen.loop(screen))
     
     print("Game End")
