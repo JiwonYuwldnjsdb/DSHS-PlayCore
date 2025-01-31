@@ -548,17 +548,6 @@ class TitleScreen(ScreenObject):
         self.fontH1 = pygame.font.Font("data/fonts/jua.ttf", int(self.height // 10))
         self.fontP = pygame.font.Font("data/fonts/jua.ttf", int(self.height // 30))
         
-        data = []
-        with open("data/MagicCatAcademy/playdata/saves.txt", "r") as file:
-            lines = file.read().split('\n')
-            for line in lines:
-                if not line.strip():
-                    continue
-                data.append(line)
-        
-        
-        self.menu_texts = ['Click to Start', 'Hold to Quit', f'Best {data[0]}']
-        
         self.player = Player(width*3/4, height*3/5, width*1.5, hp=5)
         
         self.running = True
@@ -570,6 +559,17 @@ class TitleScreen(ScreenObject):
         mouse_down = False
         mouse_down_frames = 0
         mouse_up_frames = 0
+        
+        data = []
+        with open("data/MagicCatAcademy/playdata/saves.txt", "r") as file:
+            lines = file.read().split('\n')
+            for line in lines:
+                if not line.strip():
+                    continue
+                data.append(line)
+        
+        
+        self.menu_texts = ['Click to Start', 'Hold to Quit', f'Best {data[0]}']
         
         while self.running:
             dt_ms = clock.tick(60)
