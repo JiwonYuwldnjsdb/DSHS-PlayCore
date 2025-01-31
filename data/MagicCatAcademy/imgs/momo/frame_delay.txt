@@ -1,0 +1,8 @@
+waiting 5
+spelling 5
+horizontal 5
+vertical 5
+vspell 5
+ivspell 5
+lighting 5
+attacked 5

@@ -856,9 +856,9 @@ class LynezScreen(ScreenObject):
 
     def loop(self, screen):
         running = True
-        # If you want a loading screen first, set curr_starship_screen_idx = 0
+        # If you want a loading screen first, set curr_lynez_screen = 0
         # If you want to skip straight to the menu, set it = 1
-        curr_starship_screen_idx = 1
+        curr_lynez_screen_idx = 1
 
         screen_ids = {
             "loading": 0,
@@ -866,16 +866,16 @@ class LynezScreen(ScreenObject):
         }
         
         while running:
-            if curr_starship_screen_idx == 0:
-                curr_starship_screen = LynezLoadingScreen(self.width, self.height)
-                next_screen, curr_screen_surface = curr_starship_screen.loop(screen)
-                curr_starship_screen_idx = screen_ids[next_screen]
+            if curr_lynez_screen_idx == 0:
+                curr_lynez_screen = LynezLoadingScreen(self.width, self.height)
+                next_screen, curr_screen_surface = curr_lynez_screen.loop(screen)
+                curr_lynez_screen_idx = screen_ids[next_screen]
                 pygame.time.wait(2000)
                 fade_out(screen, curr_screen_surface, self.width, self.height, 2000)
             
-            elif curr_starship_screen_idx == 1:
-                curr_starship_screen = LynezMainScreen(self.width, self.height, show_fps=self.show_fps)
-                next_screen, curr_screen_surface = curr_starship_screen.loop(screen)
+            elif curr_lynez_screen_idx == 1:
+                curr_lynez_screen = LynezMainScreen(self.width, self.height, show_fps=self.show_fps)
+                next_screen, curr_screen_surface = curr_lynez_screen.loop(screen)
                 pygame.time.wait(2000)
                 fade_out(screen, curr_screen_surface, self.width, self.height, 2000)
                 return 0, screen

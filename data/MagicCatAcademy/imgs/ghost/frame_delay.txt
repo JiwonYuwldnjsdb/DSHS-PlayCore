@@ -1,0 +1,4 @@
+moving 5
+attacked 5
+die 5
+attack 7
