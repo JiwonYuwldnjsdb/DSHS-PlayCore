@@ -40,30 +40,33 @@ class StrokeRecognizer:
         w, h = self.bounding_box_size(stroke)
         if w < 50 or h < 50:
             return False
-        ys = [p[1] for p in stroke]
-        apex_index = ys.index(min(ys))  # 최상단
-        if apex_index == 0 or apex_index == len(stroke) - 1:
-            return False
         
-        first_point = stroke[0]
-        apex_point = stroke[apex_index]
-        last_point = stroke[-1]
-        
-        dx1 = apex_point[0] - first_point[0]
-        dy1 = apex_point[1] - first_point[1]
-        if dx1 == 0:
-            return False
-        slope1 = dy1 / float(dx1)
+        for stroke in [stroke, stroke[::-1]]:
+            
+            ys = [p[1] for p in stroke]
+            apex_index = ys.index(min(ys))  # 최상단
+            if apex_index == 0 or apex_index == len(stroke) - 1:
+                return False
+            
+            first_point = stroke[0]
+            apex_point = stroke[apex_index]
+            last_point = stroke[-1]
+            
+            dx1 = apex_point[0] - first_point[0]
+            dy1 = apex_point[1] - first_point[1]
+            if dx1 == 0:
+                return False
+            slope1 = dy1 / float(dx1)
 
-        dx2 = last_point[0] - apex_point[0]
-        dy2 = last_point[1] - apex_point[1]
-        if dx2 == 0:
-            return False
-        slope2 = dy2 / float(dx2)
+            dx2 = last_point[0] - apex_point[0]
+            dy2 = last_point[1] - apex_point[1]
+            if dx2 == 0:
+                return False
+            slope2 = dy2 / float(dx2)
 
-        # 왼->꼭짓점 기울기 음수, 꼭짓점->오른쪽 기울기 양수
-        if slope1 < -0.3 and slope2 > 0.3:
-            return True
+            # 왼->꼭짓점 기울기 음수, 꼭짓점->오른쪽 기울기 양수
+            if slope1 < -0.3 and slope2 > 0.3:
+                return True
         return False
 
     def is_v_shape(self, stroke):
@@ -72,30 +75,32 @@ class StrokeRecognizer:
         w, h = self.bounding_box_size(stroke)
         if w < 50 or h < 50:
             return False
-        ys = [p[1] for p in stroke]
-        apex_index = ys.index(max(ys))  # 최하단
-        if apex_index == 0 or apex_index == len(stroke) - 1:
-            return False
         
-        first_point = stroke[0]
-        apex_point = stroke[apex_index]
-        last_point = stroke[-1]
-        
-        dx1 = apex_point[0] - first_point[0]
-        dy1 = apex_point[1] - first_point[1]
-        if dx1 == 0:
-            return False
-        slope1 = dy1 / float(dx1)
+        for stroke in [stroke, stroke[::-1]]:
+            ys = [p[1] for p in stroke]
+            apex_index = ys.index(max(ys))  # 최하단
+            if apex_index == 0 or apex_index == len(stroke) - 1:
+                return False
+            
+            first_point = stroke[0]
+            apex_point = stroke[apex_index]
+            last_point = stroke[-1]
+            
+            dx1 = apex_point[0] - first_point[0]
+            dy1 = apex_point[1] - first_point[1]
+            if dx1 == 0:
+                return False
+            slope1 = dy1 / float(dx1)
 
-        dx2 = last_point[0] - apex_point[0]
-        dy2 = last_point[1] - apex_point[1]
-        if dx2 == 0:
-            return False
-        slope2 = dy2 / float(dx2)
-        
-        # 왼->꼭짓점 기울기 양수, 꼭짓점->오른쪽 기울기 음수
-        if slope1 > 0.3 and slope2 < -0.3:
-            return True
+            dx2 = last_point[0] - apex_point[0]
+            dy2 = last_point[1] - apex_point[1]
+            if dx2 == 0:
+                return False
+            slope2 = dy2 / float(dx2)
+            
+            # 왼->꼭짓점 기울기 양수, 꼭짓점->오른쪽 기울기 음수
+            if slope1 > 0.3 and slope2 < -0.3:
+                return True
         return False
 
     def is_lightning_sign(self, stroke):
