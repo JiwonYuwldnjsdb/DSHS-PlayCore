@@ -218,7 +218,7 @@ class Player:
                 break
         
         for laser in lasers:
-            if laser.charging or laser.frame_count < 190:
+            if laser.charging or laser.frame_count < 180 or laser.frame_count > 200:
                 continue
             if self.x > laser.left and self.x < laser.right:
                 if self.x < laser.center:
