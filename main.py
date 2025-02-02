@@ -7,7 +7,7 @@ import PlayCore, Lynez, MagicCatAcademy
 def main():
     pygame.init()
     WIDTH, HEIGHT = 1280, 800   
-    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.FULLSCREEN)
     pygame.display.set_caption("DSHS PlayCore")
     
     running = True
