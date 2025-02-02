@@ -140,8 +140,8 @@ class StrokeRecognizer:
         s2 = slope(p2, p3)
         s3 = slope(p3, p4)
 
-        pos_threshold = 0.3
-        zero_threshold = 0.3  # '거의 0'으로 볼 범위
+        pos_threshold = 0.4
+        zero_threshold = 0.4  # '거의 0'으로 볼 범위
 
         # 대각선(양) - 수평 - 대각선(양)
         patternA = (s1 > pos_threshold and abs(s2) < zero_threshold and s3 > pos_threshold)
@@ -798,6 +798,8 @@ class GameScreen(ScreenObject):
         
         spell_color = (0,0,0)
         
+        prev_mouse_pos = pygame.mouse.get_pos()
+        
         while running:
             dt_ms = clock.tick(60)
             dt = dt_ms / 1000.0
@@ -815,21 +817,24 @@ class GameScreen(ScreenObject):
                             self.player.update_state('spelling')
                     elif event.type == pygame.MOUSEMOTION:
                         if self.is_drawing:
-                            self.current_stroke.append(event.pos)
-                            spell = self.strokeRecognizer.recognize_spell(self.current_stroke)
-                            
-                            if spell == 'horizontal':
-                                spell_color = (231,51,37)
-                            elif spell =='vertical':
-                                spell_color = (44,98,204)
-                            elif spell == 'vspell':
-                                spell_color = (253,245,94)
-                            elif spell == 'ivspell':
-                                spell_color = (117,250,79)
-                            elif spell == 'lighting':
-                                spell_color = (247,203,71)
-                            else:
-                                spell_color = (255,255,255)
+                            if math.hypot(prev_mouse_pos[0] - event.pos[0],
+                                          prev_mouse_pos[1] - event.pos[1]) > self.height/100:
+                                prev_mouse_pos = event.pos
+                                self.current_stroke.append(event.pos)
+                                spell = self.strokeRecognizer.recognize_spell(self.current_stroke)
+                                
+                                if spell == 'horizontal':
+                                    spell_color = (231,51,37)
+                                elif spell =='vertical':
+                                    spell_color = (44,98,204)
+                                elif spell == 'vspell':
+                                    spell_color = (253,245,94)
+                                elif spell == 'ivspell':
+                                    spell_color = (117,250,79)
+                                elif spell == 'lighting':
+                                    spell_color = (247,203,71)
+                                else:
+                                    spell_color = (255,255,255)
                             
                     elif event.type == pygame.MOUSEBUTTONUP:
                         if event.button == 1 and self.is_drawing:
