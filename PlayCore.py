@@ -2,7 +2,7 @@ import pygame
 import random
 import sys
 
-from PlayCoreLibraries import ScreenObject, blit_fps
+from localLibraries.PlayCoreLibraries import ScreenObject, blit_fps
 
 pygame.init()
 
@@ -70,9 +70,9 @@ class PlayCoreMenu(ScreenObject):
         self.tiles = [
             {"title": "Quick tips", "color": (20, 50, 100)},
             {"title": "Lynez",     "color": (40, 80, 130)},
-            {"title": "Game 4",     "color": (40, 80, 130)},
             {"title": "Magic Cat Academy",     "color": (40, 80, 130)},
-            {"title": "Game 3",     "color": (40, 80, 130)},
+            {"title": "Airship",     "color": (40, 80, 130)},
+            {"title": "Avoid Mine",     "color": (40, 80, 130)},
         ]
         self.tile_rects = []
         self.hovered_tile_index = None
@@ -202,6 +202,8 @@ class PlayCoreMenu(ScreenObject):
     def loop(self, screen):
         clock = pygame.time.Clock()
         running = True
+        
+        frame_cnt = 0
 
         while running:
             # Get delta time in seconds
@@ -217,10 +219,12 @@ class PlayCoreMenu(ScreenObject):
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     sys.exit()
-                selected = self.handle_mouse(event)
                 
-                if selected:
-                    return selected, screen
+                if (frame_cnt > 120):
+                    selected = self.handle_mouse(event)
+                    
+                    if selected:
+                        return selected, screen
 
             self.gradient_fill(screen, self.DARK_PURPLE, self.DARK_BLUE)
             self.update_squares(dt)
@@ -231,6 +235,7 @@ class PlayCoreMenu(ScreenObject):
                 blit_fps(screen, clock)
 
             pygame.display.flip()
+            frame_cnt += 1
 
 # Run standalone
 if __name__ == "__main__":
@@ -239,4 +244,4 @@ if __name__ == "__main__":
     pygame.display.set_caption("PlayCoreMenuDemo")
 
     menu_screen = PlayCoreMenu(WIDTH, HEIGHT, show_fps=True)
-    menu_screen.loop(screen)
+    print(menu_screen.loop(screen))

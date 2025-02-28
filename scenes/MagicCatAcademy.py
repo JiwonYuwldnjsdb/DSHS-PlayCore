@@ -3,7 +3,7 @@ import sys
 import math
 import random
 
-from PlayCoreLibraries import ScreenObject, fade_out, blit_fps
+from localLibraries.PlayCoreLibraries import ScreenObject, fade_out, blit_fps
 
 class StrokeRecognizer:
     def __init__(self):
@@ -44,7 +44,7 @@ class StrokeRecognizer:
         for stroke in [stroke, stroke[::-1]]:
             
             ys = [p[1] for p in stroke]
-            apex_index = ys.index(min(ys))  # 최상단
+            apex_index = ys.index(min(ys))  # top
             if apex_index == 0 or apex_index == len(stroke) - 1:
                 return False
             
@@ -64,7 +64,6 @@ class StrokeRecognizer:
                 return False
             slope2 = dy2 / float(dx2)
 
-            # 왼->꼭짓점 기울기 음수, 꼭짓점->오른쪽 기울기 양수
             if slope1 < -0.3 and slope2 > 0.3:
                 return True
         return False
@@ -78,7 +77,7 @@ class StrokeRecognizer:
         
         for stroke in [stroke, stroke[::-1]]:
             ys = [p[1] for p in stroke]
-            apex_index = ys.index(max(ys))  # 최하단
+            apex_index = ys.index(max(ys))  # bottom
             if apex_index == 0 or apex_index == len(stroke) - 1:
                 return False
             
@@ -97,19 +96,11 @@ class StrokeRecognizer:
             if dx2 == 0:
                 return False
             slope2 = dy2 / float(dx2)
-            
-            # 왼->꼭짓점 기울기 양수, 꼭짓점->오른쪽 기울기 음수
             if slope1 > 0.3 and slope2 < -0.3:
                 return True
         return False
 
     def is_lightning_sign(self, stroke):
-        """
-        '\|\' 모양을 90도 반시계로 회전한 형태:
-        - 첫 번째 구간: 대각선(양의 기울기) 혹은 (음의 기울기)
-        - 두 번째 구간: 거의 수평
-        - 세 번째 구간: 첫 번째 구간과 같은 방향의 대각선
-        """
         if len(stroke) < 4:
             return False
 
@@ -126,7 +117,7 @@ class StrokeRecognizer:
         def slope(a, b):
             dx = b[0] - a[0]
             dy = b[1] - a[1]
-            # dx가 0이면 기울기 무한대로 가정(위아래 직선)
+            
             if dx == 0:
                 if dy > 0:
                     return float('inf')
@@ -141,11 +132,10 @@ class StrokeRecognizer:
         s3 = slope(p3, p4)
 
         pos_threshold = 0.4
-        zero_threshold = 0.4  # '거의 0'으로 볼 범위
+        zero_threshold = 0.4
 
-        # 대각선(양) - 수평 - 대각선(양)
         patternA = (s1 > pos_threshold and abs(s2) < zero_threshold and s3 > pos_threshold)
-        # 대각선(음) - 수평 - 대각선(음)
+
         patternB = (s1 < -pos_threshold and abs(s2) < zero_threshold and s3 < -pos_threshold)
 
         if patternA or patternB:
@@ -166,9 +156,6 @@ class StrokeRecognizer:
         else:
             return ""
 
-#########################################################
-# 2) Ghost
-#########################################################
 class Ghost:
     AVAILABLE_SPELLS = ["horizontal", "vertical", "vspell", "ivspell", "lighting"]
     
@@ -176,12 +163,10 @@ class Ghost:
         self.x = x
         self.y = y
         
-        # 무작위 스펠 목록 (길이=spell_length)
         self.spells = random.choices(Ghost.AVAILABLE_SPELLS, k=spell_length)
         self.spell_idx = 0
         self.alive = True
         
-        # 기본 상태 & 애니메이션
         self.state = "moving"
         self.animation_frame_cnt = 0
         
@@ -189,7 +174,6 @@ class Ghost:
         self.animation_adj = {}
         self.animation_frame_delay = {}
         
-        # 예: ghost/frame_delay.txt 로부터 딜레이 읽기
         with open("data/MagicCatAcademy/imgs/ghost/frame_delay.txt", "r") as file:
             lines = file.read().split('\n')
             for line in lines:
@@ -198,7 +182,6 @@ class Ghost:
                 a_id, val = line.split()
                 self.animation_frame_delay[a_id] = int(val)
         
-        # 이미지 로드 예시
         self.animation_frames['moving'] = []
         for i in range(1):
             path = f"data/MagicCatAcademy/imgs/ghost/moving/{i+1}.png"
@@ -226,7 +209,6 @@ class Ghost:
             'attack':85/94
         }
         
-        # 실제 로딩 & 스케일
         for anim_id in self.animation_frames:
             new_list = []
             for img_path in self.animation_frames[anim_id]:
@@ -286,25 +268,21 @@ class Ghost:
         
         self.spell_width = self.spell_imgs['horizontal'].get_width()
         
-        # 이동 속도 (웨이브 로직에 따라 조정)
         self.speed = speed
     
     def check_spell(self, spell):
-        """플레이어가 사용한 스펠이 내 스펠 목록의 다음 순서와 같으면 진행"""
         if self.alive and self.spell_idx < len(self.spells):
             if spell == self.spells[self.spell_idx]:
                 self.spell_idx += 1
                 self.state = "attacked"
                 self.animation_frame_cnt = 0
                 if self.spell_idx == len(self.spells):
-                    # 유령 사망
                     self.alive = False
                     self.state = "die"
                     return (True, True)
                 return (True, False)
     
     def update(self, dt, player_x, player_y, frame_cnt):
-        """플레이어 방향으로 이동 + 애니메이션 진행"""
         if self.state != 'die' and self.state != 'attack':
             dx = player_x - self.x
             dy = player_y - self.y
@@ -315,7 +293,6 @@ class Ghost:
                 self.x += nx * self.speed * dt
                 self.y += ny * self.speed * dt
         
-        # 애니메이션 프레임 갱신
         delay = self.animation_frame_delay.get(self.state, 5)
         
         if frame_cnt % delay == 0:
@@ -338,7 +315,6 @@ class Ghost:
                 self.animation_frame_cnt %= len(self.animation_frames[self.state])
     
     def draw(self, screen):
-        """유령 이미지 + 남은 스펠 목록 표시"""
         frames = self.animation_frames[self.state]
         idx = min(self.animation_frame_cnt, len(frames) - 1)
         ghost_img = frames[idx]
@@ -359,15 +335,11 @@ class Ghost:
     def distance_to_player(self, px, py):
         return math.hypot(self.x - px, self.y - py)
 
-
-#########################################################
-# 3) Player
-#########################################################
 class Player:
     def __init__(self, x, y, width, hp=5):
         self.x = x
         self.y = y
-        self.hp = hp  # 플레이어 체력
+        self.hp = hp
         
         self.animation_frame_cnt = 0
         self.state = "waiting"
@@ -378,7 +350,6 @@ class Player:
         self.animation_adj = {}
         self.animation_frame_delay = {}
         
-        # frame_delay.txt 로딩
         with open("data/MagicCatAcademy/imgs/momo/frame_delay.txt", "r") as f:
             file_data = f.read().split('\n')
             for d in file_data:
@@ -387,7 +358,6 @@ class Player:
                 key, val = d.split()
                 self.animation_frame_delay[key] = int(val)
         
-        # 각 애니메이션 로딩
         self.animation_frames['waiting'] = []
         for i in range(12):
             path = f"data/MagicCatAcademy/imgs/momo/waiting/{i+1}.png"
@@ -445,7 +415,6 @@ class Player:
             'attacked': 110/89
         }
         
-        # 이미지 스케일
         for anim_id in self.animation_frames:
             new_list = []
             for path in self.animation_frames[anim_id]:
@@ -456,7 +425,6 @@ class Player:
                 new_list.append(scaled_img)
             self.animation_frames[anim_id] = new_list
         
-        # 위치 보정
         self.animation_adj['waiting'] = (0,0)
         self.animation_adj['spelling'] = (0, -self.animation_frames['spelling'][0].get_height()*0.05)
         self.animation_adj['vertical'] = (0, -self.animation_frames['vertical'][0].get_height()*0.35)
@@ -484,7 +452,6 @@ class Player:
         delay = self.animation_frame_delay.get(self.state, 6)
         if frame_cnt % delay == 0:
             self.animation_frame_cnt += 1
-            # 스펠 애니메이션 끝나면 waiting으로 복귀
             if (self.state in self.spells or self.state=='attacked') and self.animation_frame_cnt == len(self.animation_frames[self.state]):
                 self.update_state('waiting')
                 return
@@ -500,10 +467,6 @@ class Player:
         draw_y = self.y - self.shift_pos[1] + adj_y
         screen.blit(img, (draw_x, draw_y))
 
-
-#########################################################
-# 4) 세 가지 화면 (TitleScreen, GameScreen, GameOverScreen)
-#########################################################
 class TitleScreen(ScreenObject):
     """'Click to Start'라고 표시하고 클릭 시 GameScreen으로 이동"""
     def __init__(self, width, height):
@@ -638,11 +601,9 @@ class TitleScreen(ScreenObject):
             
             frame_cnt+=1
         
-        return "game", screen  # 혹은 기본값
-
+        return "game", screen
 
 class GameScreen(ScreenObject):
-    """실제 게임 플레이 화면 + 웨이브 방식으로 수정"""
     def __init__(self, width, height):
         super().__init__(width, height)
         
@@ -670,14 +631,12 @@ class GameScreen(ScreenObject):
         
         self.strokeRecognizer = StrokeRecognizer()
         
-        self.player = Player(width/2, height/2, width, hp=5)  # 체력 5로 예시
+        self.player = Player(width/2, height/2, width, hp=5)
         
-        # 웨이브 관련
         self.wave = 0
         self.point = 0
         self.ghosts = []
         
-        # 드로잉 관련
         self.is_drawing = False
         self.current_stroke = []
         
@@ -754,11 +713,9 @@ class GameScreen(ScreenObject):
                 x = width
                 y = random.randint(int(height/3), height)
         
-        # 스펠 길이에 따른 속도 조정
-        # 기본 속도 = 50, 스펠 길이 기준 3보다 작으면 좀 더 빠르게, 크면 느리게
         base_speed = 50
         speed = base_speed + (3 - spell_length) * 5
-        # 너무 느리거나 빠른 경우 제한
+        
         speed = max(20, min(speed, 80))
         
         direction = 0 if x < width/2 else 1
@@ -766,9 +723,8 @@ class GameScreen(ScreenObject):
         return Ghost(x, y, spell_length, width, speed=speed, direction=direction)
     
     def spawn_wave(self):
-        """현재 wave 값에 따라 새로운 유령들을 소환"""
-        wave_ghost_count = min(self.wave//3+1, 12)  # 웨이브가 올라갈수록 수 증가 (적당히 제한)
-        wave_max_len = min(self.wave//5+1, 8)       # 웨이브 1이면 길이최대2, 2이면최대3, ... 최대8
+        wave_ghost_count = min(self.wave//3+1, 12)
+        wave_max_len = min(self.wave//5+1, 8)
         
         for _ in range(wave_ghost_count):
             spell_len = random.randint(1, wave_max_len)
@@ -839,15 +795,15 @@ class GameScreen(ScreenObject):
                     elif event.type == pygame.MOUSEBUTTONUP:
                         if event.button == 1 and self.is_drawing:
                             self.is_drawing = False
-                            # 스펠 인식
+                            
                             spell = self.strokeRecognizer.recognize_spell(self.current_stroke)
                             
                             if spell:
                                 self.player.update_state(spell)
-                                # 살아있는 유령에게 체크
+                                
                                 for g in self.ghosts:
                                     if g.alive:
-                                        res = g.check_spell(spell) # attacked?, dead?
+                                        res = g.check_spell(spell)
                                         
                                         if res:
                                             if res[1]:
@@ -860,7 +816,6 @@ class GameScreen(ScreenObject):
                                                         g_tmp.state = "attacked"
                                                         g_tmp.animation_frame_cnt = 0
                                                         if g_tmp.spell_idx == len(g_tmp.spells):
-                                                            # 유령 사망
                                                             g_tmp.alive = False
                                                             g_tmp.state = "die"
                                                             point_target += 10
@@ -871,27 +826,24 @@ class GameScreen(ScreenObject):
             
             for g in self.ghosts:
                 g.update(dt, self.player.x, self.player.y, frame_cnt)
-                # 'die' 상태에서 마지막 프레임이 끝났다면 제거
                 if not g.alive:
                     max_idx = len(g.animation_frames['die']) - 1
                     if g.animation_frame_cnt >= max_idx:
                         self.ghosts.remove(g)
             
-            # -- 플레이어 업데이트(애니메이션만) --
             self.player.update(frame_cnt)
             
             if update_enabled:
                 for g in self.ghosts:
                     if g.alive:
                         dist = g.distance_to_player(self.player.x, self.player.y)
-                        if dist < 50*self.width/1280:  # 거리 50 이하 -> 충돌로 간주
+                        if dist < 50*self.width/1280:
                             self.player.hp -= 1
                             g.state = 'attack'
                             self.player.update_state('attacked')
                             g.alive = False
-                            break  # 1초에 최대 1만 깎이므로 break
+                            break
             
-            # -- HP가 0 이하 -> GameOverScreen으로 --
             if self.player.hp <= 0:
                 update_enabled = False
                 if waitng_frame == 30:
@@ -906,31 +858,24 @@ class GameScreen(ScreenObject):
                     return "gameover", screen, self.point
             
             if update_enabled:
-                # -- 웨이브 클리어 체크(살아있는 유령이 하나도 없으면 다음 웨이브) --
                 if len(self.ghosts) == 0:
-                    # 다음 웨이브로
                     self.wave += 1
                     self.spawn_wave()
             
             self.point = min(self.point+point_increase_vel, point_target)
             
-            # ------------------- 그리기 -------------------
             screen.blit(self.background_imgs[min(self.wave//10,3)], self.background_img_pos)
             
-            # 플레이어
             self.player.draw(screen)
             
-            # 유령들
             for g in self.ghosts:
                 g.draw(screen)
             
             for g in self.ghosts:
                 g.draw_spell(screen)
             
-            # 현재 드로잉 스펠
             self.draw_stroke(screen, self.current_stroke, spell_color)
             
-            # HP 표시 + 웨이브 표시
             start_x = self.width/40
             for _ in range(self.player.hp):
                 screen.blit(self.heart_img_filled, (start_x, self.width/40))
@@ -942,17 +887,16 @@ class GameScreen(ScreenObject):
 
             wave_text = self.fontH1.render(f"{self.point}", True, (242,169,59))
             text_rect = wave_text.get_rect()
-            text_rect.topright = (screen.get_width() - self.width/40, self.width/110)  # 20px padding from the right
+            text_rect.topright = (screen.get_width() - self.width/40, self.width/110)
             screen.blit(wave_text, text_rect)
             
             pygame.display.flip()
             frame_cnt += 1
         
-        return "gameover", screen  # 기본 반환
+        return "gameover", screen
 
 
 class GameOverScreen(ScreenObject):
-    """'Click to Restart' 표시. 클릭하면 TitleScreen으로 복귀"""
     def __init__(self, width, height):
         super().__init__(width, height)
         self.running = True
@@ -1010,7 +954,6 @@ class GameOverScreen(ScreenObject):
                     pygame.quit()
                     sys.exit()
                 elif event.type == pygame.MOUSEBUTTONDOWN:
-                    # 클릭 -> TitleScreen으로 복귀
                     return "title", screen
             
             screen.fill(self.white)
@@ -1024,10 +967,6 @@ class GameOverScreen(ScreenObject):
         
         return "title", screen
 
-
-#########################################################
-# 5) 전체 흐름 관리 (MagicCatAcademyMainScreen)
-#########################################################
 class MagicCatAcademyMainScreen(ScreenObject):
     def __init__(self, width, height, show_fps=False):
         super().__init__(width, height)
@@ -1036,10 +975,8 @@ class MagicCatAcademyMainScreen(ScreenObject):
     def loop(self, screen):
         running = True
         
-        # 화면 state: "title" → "game" → "gameover" → ...
         current_state = "title"
         
-        # 화면 클래스들 준비
         title_screen = TitleScreen(self.width, self.height)
         game_screen = GameScreen(self.width, self.height)
         gameover_screen = GameOverScreen(self.width, self.height)
@@ -1058,18 +995,11 @@ class MagicCatAcademyMainScreen(ScreenObject):
                 next_state, _ = gameover_screen.loop(screen, point)
                 current_state = next_state
             
-            # 필요하다면 fade_out 등 화면 전환 효과도 추가할 수 있음
-            
-            # 만약 "exit" 같은 상태를 만들어 게임을 완전히 종료하고 싶다면 해당 로직 추가
             if current_state == "exit":
                 running = False
         
         return 0, screen
 
-
-##########################################################
-# 로딩 화면 (옵션) - 여기서는 그대로 사용 예시
-##########################################################
 class MagicCatAcademyLoadingScreen:
     def __init__(self, width, height, show_fps):
         self.width = width
@@ -1099,7 +1029,6 @@ class MagicCatAcademyLoadingScreen:
         
         self.button_rect = pygame.Rect(self.width*0.2, self.height*0.2, self.width*0.6, self.height*0.6)
 
-        # 삼각형 모양(예시)
         p1 = self.adj_pos(
             self.background_img_pos,
             self.background_img.get_width() * 97/200,
@@ -1144,7 +1073,6 @@ class MagicCatAcademyLoadingScreen:
         idx = 0
         n = len(points)
 
-        # offset 위치 찾기
         for i in range(n):
             seg_len = self.distance(points[i], points[(i+1) % n])
             if offset <= seg_len:
@@ -1201,7 +1129,6 @@ class MagicCatAcademyLoadingScreen:
             
             self.offset += self.rotation_speed * dt
 
-            # 버튼 색 변경 애니메이션
             if self.hovered:
                 for i in range(3):
                     self.button_color[i] += (self.white[i] - self.dark_gray[i])*0.05
@@ -1213,20 +1140,17 @@ class MagicCatAcademyLoadingScreen:
 
             screen.fill(self.gray)
             
-            # 배경
             screen.blit(self.background_img, self.background_img_pos)
             
-            # 삼각형 하이라이트
             highlight_surf = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
             path_points = self.get_path_points(self.triangle_points, self.offset, self.highlight_length)
             if len(path_points) >= 2:
                 pygame.draw.lines(highlight_surf, self.white_alpha, False, path_points, self.highlight_thickness)
             radius = self.highlight_thickness // 2
             for pt in path_points:
-                pygame.draw.circle(highlight_surf, self.white_alpha, (int(pt[0]), int(pt[1])), radius)
+                pygame.draw.circle(highlight_surf, self.white_alpha, (int(pt[0]), int(pt[1])), radius-1)
             screen.blit(highlight_surf, (0, 0))
             
-            # 버튼 모양(삼각형)
             pygame.draw.polygon(screen, self.button_color, self.triangle_points)
 
             if self.show_fps:
@@ -1236,10 +1160,6 @@ class MagicCatAcademyLoadingScreen:
 
         return "menu", screen
 
-
-##########################################################
-# 최상위 MagicCatAcademyScreen
-##########################################################
 class MagicCatAcademyScreen(ScreenObject):
     def __init__(self, width, height, show_fps=False):
         super().__init__(width, height)
@@ -1247,8 +1167,7 @@ class MagicCatAcademyScreen(ScreenObject):
 
     def loop(self, screen):
         running = True
-        # 0: 로딩, 1: 메인 메뉴(혹은 본게임)
-        curr_magiccat_screen_idx = 1  # 바로 메인으로 넘어가는 예시
+        curr_magiccat_screen_idx = 0
 
         screen_ids = {
             "loading": 0,
@@ -1267,7 +1186,6 @@ class MagicCatAcademyScreen(ScreenObject):
                 fade_out(screen, curr_screen_surface, self.width, self.height, 1000)
             
             elif curr_magiccat_screen_idx == 1:
-                # 실제 플레이 화면
                 curr_magiccat_screen = MagicCatAcademyMainScreen(
                     self.width, self.height, show_fps=self.show_fps
                 )
@@ -1276,20 +1194,14 @@ class MagicCatAcademyScreen(ScreenObject):
                 pygame.time.wait(1000)
                 fade_out(screen, curr_screen_surface, self.width, self.height, 1000)
                 
-                # 메인 화면이 끝났다고 가정 -> 종료
                 return 0, screen
 
-
-##########################################################
-# 실행 부분
-##########################################################
 if __name__ == "__main__":
     pygame.init()
     WIDTH, HEIGHT = 1280, 800
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     pygame.display.set_caption("MagicCatAcademy")
 
-    # 최상위 스크린 실행
     main_screen = MagicCatAcademyScreen(WIDTH, HEIGHT, show_fps=True)
     print(main_screen.loop(screen))
     

@@ -3,7 +3,7 @@ import random
 import math
 import sys
 from collections import deque
-from PlayCoreLibraries import ScreenObject, fade_in, fade_out, blit_fps
+from localLibraries.PlayCoreLibraries import ScreenObject, fade_in, fade_out, blit_fps
 import numpy as np
 
 class Lines:
@@ -89,93 +89,51 @@ class Player:
         return distance
 
     def reflect_velocity(self, A, B, speedx, speedy):
-        """
-        직선 AB에 대한 플레이어의 속도 벡터를 반사시킵니다.
-        
-        Parameters:
-        A (tuple): 점 A의 좌표 (x1, y1)
-        B (tuple): 점 B의 좌표 (x2, y2)
-        speedx (float): 플레이어의 x축 속도
-        speedy (float): 플레이어의 y축 속도
-        
-        Returns:
-        tuple: 반사된 속도 벡터 (v1, v2)
-        """
         x1, y1 = A
         x2, y2 = B
         
-        # 직선 AB의 방향 벡터
         dx = x2 - x1
         dy = y2 - y1
         
-        # 직선 AB의 길이
         length = math.hypot(dx, dy)
         if length == 0:
-            raise ValueError("점 A와 B는 서로 다른 점이어야 합니다.")
+            raise ValueError("Point A and B should be different")
         
-        # 직선 AB의 단위 방향 벡터
         ux = dx / length
         uy = dy / length
         
-        # 속도 벡터 v = (speedx, speedy)
-        # v와 AB 방향 벡터 u의 내적
         dot = speedx * ux + speedy * uy
         
-        # 반사된 속도 벡터 v' = 2*(v·u)*u - v
         v1 = 2 * dot * ux - speedx
         v2 = 11 * self.adj_constant
         
         return v1, v2
     
     def ccw(self, a, b, c):
-        """
-        Compute the cross product to determine the orientation.
-        Returns a positive value if counter-clockwise,
-        negative if clockwise, and zero if colinear.
-        
-        Each point is represented as a list [x, y].
-        """
         return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
 
     def on_segment(self, a, b, c):
-        """
-        Check if point b lies on segment ac.
-        Assumes that a, b, c are colinear.
-        
-        Each point is represented as a list [x, y].
-        """
         return min(a[0], c[0]) <= b[0] <= max(a[0], c[0]) and \
             min(a[1], c[1]) <= b[1] <= max(a[1], c[1])
 
     def segments_intersect(self, p1, p2, p3, p4):
-        """
-        Determine if the line segments p1p2 and p3p4 intersect.
-        
-        Each point is represented as a list [x, y].
-        """
         d1 = self.ccw(p1, p2, p3)
         d2 = self.ccw(p1, p2, p4)
         d3 = self.ccw(p3, p4, p1)
         d4 = self.ccw(p3, p4, p2)
 
-        # General case
         if (d1 * d2 < 0) and (d3 * d4 < 0):
             return True
 
-        # Special Cases
-        # p1, p2 and p3 are colinear and p3 lies on segment p1p2
         if d1 == 0 and self.on_segment(p1, p3, p2):
             return True
 
-        # p1, p2 and p4 are colinear and p4 lies on segment p1p2
         if d2 == 0 and self.on_segment(p1, p4, p2):
             return True
 
-        # p3, p4 and p1 are colinear and p1 lies on segment p3p4
         if d3 == 0 and self.on_segment(p3, p1, p4):
             return True
 
-        # p3, p4 and p2 are colinear and p2 lies on segment p3p4
         if d4 == 0 and self.on_segment(p3, p2, p4):
             return True
 
@@ -321,7 +279,7 @@ class Laser:
                         int(color[1] - (self.color[1] - self.target_color[1]) * 0.03),
                         int(color[2] - (self.color[2] - self.target_color[2]) * 0.03))
 
-            if new_color[0] < 10: # dark_blue rgb color
+            if new_color[0] < 10:
                 continue
             
             if new_line + self.left <= self.center:
@@ -834,11 +792,14 @@ class LynezLoadingScreen(ScreenObject):
     def __init__(self, width, height):
         super().__init__(width, height)
         
+        self.dark_blue = (10,17,30)
+        self.white = (255,255,255)
+        
     def loop(self, screen):
         surface = pygame.Surface((self.width, self.height))
-        surface.fill((26, 33, 46))
+        surface.fill(self.dark_blue)
 
-        title_font = pygame.font.Font("data/fonts/SairaCondensed-Light.ttf", int(self.height // 20))
+        title_font = pygame.font.Font("data/fonts/SairaCondensed-Light.ttf", int(self.height // 10))
         title_text = title_font.render("Lynez", True, self.white)
         
         title_text_rect = title_text.get_rect()
@@ -847,6 +808,7 @@ class LynezLoadingScreen(ScreenObject):
         surface.blit(title_text, title_text_rect)
         
         fade_in(screen, surface, self.width, self.height, 2000)
+        
         return "menu", screen
 
 class LynezScreen(ScreenObject):
@@ -856,9 +818,7 @@ class LynezScreen(ScreenObject):
 
     def loop(self, screen):
         running = True
-        # If you want a loading screen first, set curr_lynez_screen = 0
-        # If you want to skip straight to the menu, set it = 1
-        curr_lynez_screen_idx = 1
+        curr_lynez_screen_idx = 0
 
         screen_ids = {
             "loading": 0,
