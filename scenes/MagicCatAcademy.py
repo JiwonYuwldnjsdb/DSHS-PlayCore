@@ -716,7 +716,7 @@ class GameScreen(ScreenObject):
         base_speed = 50
         speed = base_speed + (3 - spell_length) * 5
         
-        speed = max(20, min(speed, 80))
+        speed = max(40, min(speed, 80))
         
         direction = 0 if x < width/2 else 1
         
@@ -724,7 +724,7 @@ class GameScreen(ScreenObject):
     
     def spawn_wave(self):
         wave_ghost_count = min(self.wave//3+1, 12)
-        wave_max_len = min(self.wave//5+1, 8)
+        wave_max_len = min(self.wave//5+1, 10)
         
         for _ in range(wave_ghost_count):
             spell_len = random.randint(1, wave_max_len)
@@ -759,6 +759,21 @@ class GameScreen(ScreenObject):
         while running:
             dt_ms = clock.tick(60)
             dt = dt_ms / 1000.0
+            
+            ### moved to the front for early update ###
+            
+            if self.player.hp <= 0:
+                update_enabled = False
+                if waitng_frame == 30:
+                    for g in self.ghosts:
+                        g.animation_frame_cnt = 3
+                        g.state = 'die'
+                        g.alive = False
+                
+                waitng_frame -= 1
+                
+                if waitng_frame == 0:
+                    return "gameover", screen, self.point
             
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -843,19 +858,6 @@ class GameScreen(ScreenObject):
                             self.player.update_state('attacked')
                             g.alive = False
                             break
-            
-            if self.player.hp <= 0:
-                update_enabled = False
-                if waitng_frame == 30:
-                    for g in self.ghosts:
-                        g.animation_frame_cnt = 3
-                        g.state = 'die'
-                        g.alive = False
-                
-                waitng_frame -= 1
-                
-                if waitng_frame == 0:
-                    return "gameover", screen, self.point
             
             if update_enabled:
                 if len(self.ghosts) == 0:

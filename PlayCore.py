@@ -220,7 +220,7 @@ class PlayCoreMenu(ScreenObject):
                     pygame.quit()
                     sys.exit()
                 
-                if (frame_cnt > 120):
+                if (frame_cnt > 90):
                     selected = self.handle_mouse(event)
                     
                     if selected:
