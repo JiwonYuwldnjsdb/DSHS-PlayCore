@@ -716,7 +716,7 @@ class GameScreen(ScreenObject):
         base_speed = 50
         speed = base_speed + (3 - spell_length) * 5
         
-        speed = max(40, min(speed, 80))
+        speed = max(30, min(speed, 80))
         
         direction = 0 if x < width/2 else 1
         
