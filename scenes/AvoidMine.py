@@ -337,7 +337,7 @@ class AvoidMineMainScreen(ScreenObject):
             location_2 = random.choice(divided_areas[area])
             divided_areas[area].remove(location_2)
 
-            new_score_mine = ScoreMine((location_2[0] - random.randint(-4, 4), location_2[1] - random.randint(-4, 4)), size)
+            new_score_mine = ScoreMine(self.height, self.width, (location_2[0] - random.randint(-4, 4), location_2[1] - random.randint(-4, 4)), size)
             score_mines.append(new_score_mine)
 
             location_3 = random.choice(divided_areas[area])
@@ -576,7 +576,7 @@ class TrapMine(Mine): #건들면 게임 오버
 
 class ScoreMine(Mine): #건들면 점수 얻음
     def __init__(self, screen_width, screen_height, location, size):
-        self.scscreen_width = screen_width
+        self.screen_width = screen_width
         self.screen_height = screen_height
         super().__init__(location, size)
         self.image_1 = pygame.transform.scale(pygame.image.load("data/AvoidMine/imgs/score_mine.png"), (self.size, self.size))
