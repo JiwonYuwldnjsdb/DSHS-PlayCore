@@ -254,6 +254,17 @@ class AirshipMainScreen(ScreenObject):
 
         while self.running:
             screen.fill(self.main_color)
+            if self.state == 0:
+                self.background.change_areas()
+                self.background.make_stripe(3, self.speed_constant, self.background_cooldown)
+                self.background.move_stripe()
+                self.background.draw(screen)
+
+                self.signalLight.draw(screen)
+
+                self.airship.draw(screen, 0, 0)
+
+                screen.blit(self.surface, (0, 0))
 
             dt_ms = clock.tick(60)
 
@@ -303,17 +314,6 @@ class AirshipMainScreen(ScreenObject):
 
 
             if self.state == 0:
-                self.background.change_areas()
-                self.background.make_stripe(3, self.speed_constant, self.background_cooldown)
-                self.background.move_stripe()
-                self.background.draw(screen)
-
-                self.signalLight.draw(screen)
-
-                self.airship.draw(screen, 0, 0)
-
-                screen.blit(self.surface, (0, 0))
-
                 ### Blit background ###
 
                 ### Blit Effects ###
