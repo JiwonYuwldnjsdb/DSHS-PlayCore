@@ -3,6 +3,8 @@ import random
 import sys
 import math
 from enum import Enum, auto
+from collections import deque
+from typing import Dict, Tuple
 
 from localLibraries.PlayCoreLibraries import ScreenObject, blit_fps  # 그대로 사용
 
@@ -16,9 +18,31 @@ class GameState(Enum):
     TRANSITION = auto()
     ENLARGED = auto()
 
-# ---------------------------------------------------------------------------
-# Background floating squares (keep)
-# ---------------------------------------------------------------------------
+# ----------------------------- Helpers / Easing ----------------------------
+
+def clamp01(x):
+    return 0.0 if x < 0.0 else 1.0 if x > 1.0 else x
+
+def ease_out_cubic(t):
+    t = clamp01(t); return 1 - (1 - t) ** 3
+
+def ease_in_out_quad(t):
+    t = clamp01(t); return 2*t*t if t < 0.5 else 1 - (-2*t + 2) ** 2 / 2
+
+def ease_out_back(t, s=1.70158):
+    t = clamp01(t); return 1 + (s + 1)*(t-1)**3 + s*(t-1)**2
+
+def lerp(a, b, t):
+    return a + (b - a) * t
+
+def lerp_rect(r1, r2, t):
+    x = lerp(r1.x, r2.x, t)
+    y = lerp(r1.y, r2.y, t)
+    w = lerp(r1.width, r2.width, t)
+    h = lerp(r1.height, r2.height, t)
+    return pygame.Rect(int(x), int(y), int(w), int(h))
+
+# ----------------------------- Background Squares --------------------------
 class Square:
     def __init__(self, x, size, speed, angle_speed, screen_height):
         self.size = size
@@ -28,8 +52,9 @@ class Square:
         self.angle_speed = angle_speed
         self.angle = 0
         self.alpha = 15.0
-        self.surface = pygame.Surface((size, size), pygame.SRCALPHA)
-        self.surface.fill((255, 255, 255, int(self.alpha)))
+        surf = pygame.Surface((size, size), pygame.SRCALPHA)
+        surf.fill((255, 255, 255, int(self.alpha)))
+        self.surface = surf.convert_alpha()
 
     def update(self, dt):
         self.y -= self.speed * dt
@@ -42,21 +67,56 @@ class Square:
         rect = rotated_surface.get_rect(center=(self.x, self.y))
         screen.blit(rotated_surface, rect.topleft)
 
-# ---------------------------------------------------------------------------
-# Easing / utils
-# ---------------------------------------------------------------------------
-def clamp01(x): return 0.0 if x < 0.0 else 1.0 if x > 1.0 else x
-def ease_out_cubic(t): t = clamp01(t); return 1 - (1 - t) ** 3
-def ease_in_out_quad(t): t = clamp01(t); return 2*t*t if t < 0.5 else 1 - (-2*t + 2) ** 2 / 2
-def ease_out_back(t, s=1.70158): t = clamp01(t); return 1 + (s + 1)*(t-1)**3 + s*(t-1)**2
-def lerp(a, b, t): return a + (b - a) * t
+# ----------------------------- Cards & Caches ------------------------------
+class Card:
+    def __init__(self, title, color):
+        self.title = title
+        self.color = color
 
-def lerp_rect(r1, r2, t):
-    x = lerp(r1.x, r2.x, t)
-    y = lerp(r1.y, r2.y, t)
-    w = lerp(r1.width, r2.width, t)
-    h = lerp(r1.height, r2.height, t)
-    return pygame.Rect(int(x), int(y), int(w), int(h))
+class ShadowCache:
+    def __init__(self):
+        self.cache: Dict[Tuple[int,int,int], pygame.Surface] = {}
+    def get(self, w, h, radius):
+        key = (w, h, radius)
+        img = self.cache.get(key)
+        if img is None:
+            s = pygame.Surface((w+18, h+18), pygame.SRCALPHA)
+            pygame.draw.rect(s, (0,0,0,90), s.get_rect(), border_radius=radius+4)
+            img = s.convert_alpha()
+            self.cache[key] = img
+        return img
+
+class CardBodyCache:
+    def __init__(self):
+        self.cache: Dict[Tuple[int,int,int,Tuple[int,int,int],int], pygame.Surface] = {}
+    def get(self, w, h, radius, color, alpha=230):
+        key = (w, h, radius, color, alpha)
+        img = self.cache.get(key)
+        if img is None:
+            body = pygame.Surface((w, h), pygame.SRCALPHA)
+            pygame.draw.rect(body, (*color, alpha), body.get_rect(), border_radius=radius)
+            pygame.draw.rect(body, (255, 255, 255, int(alpha*0.14)), body.get_rect(), width=2, border_radius=radius)
+            img = body.convert_alpha()
+            self.cache[key] = img
+        return img
+
+class GradOverlayCache:
+    def __init__(self):
+        self.cache: Dict[Tuple[int,int,int], pygame.Surface] = {}
+    def get(self, w, h, radius):
+        key = (w, h, radius)
+        g = self.cache.get(key)
+        if g is None:
+            grad = pygame.Surface((w, h), pygame.SRCALPHA)
+            for y in range(h):
+                a = int(70 * (1 - y / max(1, h)))
+                pygame.draw.line(grad, (255, 255, 255, a), (0, y), (w, y))
+            mask = pygame.Surface((w, h), pygame.SRCALPHA)
+            pygame.draw.rect(mask, (255,255,255,255), mask.get_rect(), border_radius=radius)
+            grad.blit(mask, (0,0), special_flags=pygame.BLEND_RGBA_MULT)
+            g = grad.convert_alpha()
+            self.cache[key] = g
+        return g
 
 # ---------------------------------------------------------------------------
 # Particles
@@ -73,15 +133,12 @@ class Spark:
         self.age = 0.0
         self.size = random.randint(2, 4)
         self.color = color
-
     def update(self, dt):
         self.age += dt
         self.x += self.vx * dt
         self.y += self.vy * dt
-        self.vy += 300 * dt  # gravity
-
+        self.vy += 300 * dt
     def alive(self): return self.age < self.life
-
     def draw(self, screen):
         alpha = int(255 * (1 - (self.age / self.life)))
         col = (*self.color, alpha)
@@ -102,36 +159,25 @@ class ImplodeSpark:
         self.age = 0.0
         self.size = random.randint(2, 3)
         self.color = color
-
     def update(self, dt):
         self.age += dt
         self.x += self.vx * dt
         self.y += self.vy * dt
-        # gentle decel
         self.vx *= (0.90 ** (dt * 60))
         self.vy *= (0.90 ** (dt * 60))
-
-    def alive(self):
-        return self.age < self.life
-
+    def alive(self): return self.age < self.life
     def draw(self, screen):
         a = int(255 * (1 - (self.age / self.life)))
         pygame.draw.circle(screen, (*self.color, a), (int(self.x), int(self.y)), self.size)
 
 class RingPulse:
-    """Landing ripple ring"""
     def __init__(self, center, max_radius, dur=0.35):
         self.center = (int(center[0]), int(center[1]))
         self.max_r = int(max_radius)
         self.dur = dur
         self.t = 0.0
-
-    def update(self, dt):
-        self.t += dt
-
-    def alive(self):
-        return self.t < self.dur
-
+    def update(self, dt): self.t += dt
+    def alive(self): return self.t < self.dur
     def draw(self, screen):
         p = clamp01(self.t / self.dur)
         r = int(self.max_r * ease_out_cubic(p))
@@ -140,19 +186,22 @@ class RingPulse:
             pygame.draw.circle(screen, (255, 255, 255, a), self.center, r, width=3)
 
 # ---------------------------------------------------------------------------
-# Card
-# ---------------------------------------------------------------------------
-class Card:
-    def __init__(self, title, color):
-        self.title = title
-        self.color = color
-
-# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 class PlayCoreMenu(ScreenObject):
     DARK_BLUE   = (10, 10, 40)
     DARK_PURPLE = (40, 10, 70)
+
+    # Inertia tuning
+    INERTIA_DECEL = 2000.0   # px/s^2 (감속 더 빠르게)
+    INERTIA_START_V = 300.0  # px/s 이상일 때만 관성 시작
+    INERTIA_CAP = 1400.0     # 초기 관성 속도 최대치
+    SNAP_NEAR = 18           # px 이내면 스냅
+    CENTER_OPEN_EPS = 0.5    # 클릭 후 '중앙 도달' 판정 허용 오차(px)
+
+    # Vertical positions (tweakable)
+    CAROUSEL_VPOS = 0.50     # 0.50 = 정확히 세로 중앙
+    ENLARGED_VPOS = 0.50     # 확대 카드 중앙 위치
 
     def __init__(self, width, height, show_fps=False):
         super().__init__(width, height)
@@ -187,12 +236,27 @@ class PlayCoreMenu(ScreenObject):
         self.sparks = []
         self.implode_sparks = []
 
-        # Vignette
+        # Caches
+        self._shadow_cache = ShadowCache()
+        self._card_cache = CardBodyCache()
+        self._grad_cache = GradOverlayCache()
+        self._title_cache = [self.font.render(c.title, True, (255,255,255)) for c in self.cards]
+
+        # Vignette & background gradient (pre-render)
         self.vignette = self._build_vignette()
+        self._bg = pygame.Surface((self.width, self.height)).convert()
+        self._gradient_fill(self._bg, self.DARK_PURPLE, self.DARK_BLUE)
+
+        # Inertia samples
+        self._vel_samples = deque(maxlen=8)
+        self._last_drag_dir = 0
+
+        # Back flag (첫 번째 카드 클릭 시 되돌아가기)
+        self.go_back_requested = False
 
     # ---------------------------- Setup -------------------------------------
     def setup_cards(self):
-        titles = ["Instructions", "Game 1", "Game 2", "Game 3", "Game 4", "Game 5", "Game 6"]
+        titles = ["Home", "Game 1", "Game 2", "Game 3", "Game 4", "Game 5", "Game 6"]
         base_colors = [
             (35, 90, 160),
             (190, 120, 60),
@@ -210,14 +274,15 @@ class PlayCoreMenu(ScreenObject):
         self.slot_gap = int(self.width * 0.04)
         self.slot = self.card_w + self.slot_gap
 
-        # Scroll
+        # Scroll state
         self.scroll = 0.0
-        self.velocity = 0.0
+        self.velocity = 0.0   # px/s
         self.dragging = False
         self.mouse_down = False
         self.click_start_time = 0.0
         self.total_drag_dist = 0.0
         self.target_index = None
+        self.pending_open_index = None
 
         self.min_scroll = 0.0
         self.max_scroll = max(0.0, (len(self.cards) - 1) * self.slot)
@@ -225,14 +290,14 @@ class PlayCoreMenu(ScreenObject):
         self.card_screen_rects = [pygame.Rect(0, 0, 0, 0) for _ in self.cards]
 
     # ------------------------- Background / Vignette ------------------------
-    def gradient_fill(self, screen, color_top, color_bottom):
-        width, height = screen.get_size()
-        for y in range(height):
-            ratio = y / (height - 1) if height > 1 else 0
+    def _gradient_fill(self, screen, color_top, color_bottom):
+        w, h = screen.get_size()
+        for y in range(h):
+            ratio = y / (h - 1) if h > 1 else 0
             r = int(color_top[0] + (color_bottom[0] - color_top[0]) * ratio)
             g = int(color_top[1] + (color_bottom[1] - color_top[1]) * ratio)
             b = int(color_top[2] + (color_bottom[2] - color_top[2]) * ratio)
-            pygame.draw.line(screen, (r, g, b), (0, y), (width, y))
+            pygame.draw.line(screen, (r, g, b), (0, y), (w, y))
 
     def spawn_squares(self):
         size = random.randint(self.height // 36, self.height // 12)
@@ -252,7 +317,6 @@ class PlayCoreMenu(ScreenObject):
             sq.draw(screen)
 
     def _build_vignette(self):
-        # pre-rendered soft vignette
         surf = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
         cx, cy = self.width/2, self.height/2
         maxd = (cx**2 + cy**2) ** 0.5
@@ -262,17 +326,15 @@ class PlayCoreMenu(ScreenObject):
                 t = clamp01((d - maxd*0.55) / (maxd*0.45))
                 a = int(160 * t)
                 surf.set_at((x, y), (0, 0, 0, a))
-        return surf
+        return surf.convert_alpha()
 
     # ----------------------------- Card visuals -----------------------------
-    def _card_base(self, size, color, alpha=230, radius=24):
-        surf = pygame.Surface(size, pygame.SRCALPHA)
-        pygame.draw.rect(surf, (*color, alpha), surf.get_rect(), border_radius=radius)
-        pygame.draw.rect(surf, (255, 255, 255, int(alpha*0.14)), surf.get_rect(), width=2, border_radius=radius)
-        return surf
+    def _apply_round_mask(self, surf, radius):
+        mask = pygame.Surface(surf.get_size(), pygame.SRCALPHA)
+        pygame.draw.rect(mask, (255, 255, 255, 255), mask.get_rect(), border_radius=radius)
+        surf.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
 
     def _shine(self, target_surf, t):
-        # diagonal sheen sweep (t in [0,1])
         if t <= 0.0 or t >= 1.0: return
         w, h = target_surf.get_size()
         band_w = int(max(12, w * 0.12))
@@ -292,23 +354,16 @@ class PlayCoreMenu(ScreenObject):
         offset = int((phase % 1.0) * gap)
         for x in range(-h, w + h, gap):
             pygame.draw.line(surf, (255, 255, 255, 16), (x + offset, 0), (x - h + offset, h), 2)
-        return surf
-
-    def _pulse_border(self, screen, rect, t, radius=28):
-        glow = int(80 + 60 * (0.5 + 0.5 * math.sin(t*2.2)))
-        stroke = pygame.Surface((rect.w+20, rect.h+20), pygame.SRCALPHA)
-        pygame.draw.rect(stroke, (255, 255, 255, glow), stroke.get_rect(), width=4, border_radius=radius)
-        screen.blit(stroke, (rect.x-10, rect.y-10))
+        return surf.convert_alpha()
 
     def draw_card(self, screen, rect, color, title, alpha=220, hovered=False):
-        # shadow
-        shadow = pygame.Surface((rect.w+18, rect.h+18), pygame.SRCALPHA)
-        pygame.draw.rect(shadow, (0, 0, 0, 90), shadow.get_rect(), border_radius=28)
-        screen.blit(shadow, (rect.x-9, rect.y-6))
-        # body
-        body = self._card_base((rect.w, rect.h), color, alpha)
+        radius = 28
+        # shadow (cache)
+        screen.blit(self._shadow_cache.get(rect.w, rect.h, radius), (rect.x-9, rect.y-6))
+        # body (cache)
+        body = self._card_cache.get(rect.w, rect.h, radius, color, alpha=alpha)
         screen.blit(body, rect.topleft)
-        # title
+        # title (cache)
         title_surf = self.font.render(title, True, (255, 255, 255))
         title_rect = title_surf.get_rect(center=(rect.centerx, rect.bottom - int(rect.h*0.12)))
         screen.blit(title_surf, title_rect)
@@ -318,7 +373,7 @@ class PlayCoreMenu(ScreenObject):
     # ----------------------------- Carousel ---------------------------------
     def draw_carousel(self, screen, mouse_pos):
         center_x = self.width // 2
-        center_y = int(self.height * 0.56)
+        center_y = int(self.height * self.CAROUSEL_VPOS)
 
         order = []
         for i in range(len(self.cards)):
@@ -327,7 +382,7 @@ class PlayCoreMenu(ScreenObject):
             t = max(0.0, 1.0 - dist / (self.slot))
             scale = 0.9 + 0.2 * t
             order.append((scale, i))
-        order.sort()  # small→large so largest draws last
+        order.sort()
 
         hovered_index = None
         for _, i in order:
@@ -345,27 +400,19 @@ class PlayCoreMenu(ScreenObject):
 
             hovered = rect.collidepoint(mouse_pos)
             if t < 0.65:
-                trail = self._card_base((w, h), card.color, alpha=int(alpha*0.35))
+                trail = self._card_cache.get(w, h, 28, card.color, alpha=int(alpha*0.35))
                 screen.blit(trail, (rect.x + 6, rect.y + 2))
             self.draw_card(screen, rect, card.color, card.title, alpha=alpha, hovered=hovered)
             if hovered: hovered_index = i
 
         return hovered_index
-    
-    def _apply_round_mask(self, surf, radius):
-        mask = pygame.Surface(surf.get_size(), pygame.SRCALPHA)
-        pygame.draw.rect(mask, (255, 255, 255, 255), mask.get_rect(), border_radius=radius)
-        # 안쪽은 그대로(흰색=1배), 바깥은 0으로 곱해서 투명 처리
-        surf.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-
 
     # ----------------------------- Transitions ------------------------------
     def _enlarged_target_rect(self):
-        # target rect for enlarged card (not full screen)
         final_h = int(self.height * 0.86)
         final_w = int(self.height * 0.52)
         rect = pygame.Rect(0, 0, final_w, final_h)
-        rect.center = (self.width // 2, int(self.height * 0.53))
+        rect.center = (self.width // 2, int(self.height * self.ENLARGED_VPOS))
         return rect
 
     def start_transition(self, index, mode="open"):
@@ -377,7 +424,6 @@ class PlayCoreMenu(ScreenObject):
         if mode == "open":
             self.transition_start_rect = self.card_screen_rects[index].copy()
             self.transition_end_rect = self._enlarged_target_rect()
-            # burst outwards
             r = self.transition_start_rect
             cx, cy = r.center
             burst_color = tuple(min(255, c+40) for c in self.cards[index].color)
@@ -385,7 +431,6 @@ class PlayCoreMenu(ScreenObject):
                 self.sparks.append(Spark((cx + random.uniform(-r.w*0.25, r.w*0.25),
                                           cy + random.uniform(-r.h*0.25, r.h*0.25)), burst_color))
         else:
-            # close: reverse with implode + ripple
             self.transition_start_rect = self._enlarged_target_rect()
             self.transition_end_rect = self.card_screen_rects[index].copy()
             self.implode_sparks.clear()
@@ -407,7 +452,6 @@ class PlayCoreMenu(ScreenObject):
                 self.implode_sparks.append(ImplodeSpark(p, end_c, color=col))
 
     def _draw_others_fade(self, screen, t):
-        # non-selected cards slide out + fade with trail (during open)
         fade = 1.0 - clamp01(t * 1.2)
         for i, card in enumerate(self.cards):
             if i == self.selected_index: continue
@@ -415,22 +459,20 @@ class PlayCoreMenu(ScreenObject):
             if rect.w <= 0 or rect.h <= 0: continue
             dir_sign = -1 if rect.centerx < self.width//2 else 1
             offset = int(lerp(0, dir_sign * self.width*0.25, ease_out_cubic(1-fade)))
-            trail = self._card_base((rect.w, rect.h), card.color, alpha=int(160*fade))
+            trail = self._card_cache.get(rect.w, rect.h, 24, card.color, alpha=int(160*fade))
             screen.blit(trail, (rect.x + offset + 10, rect.y + 4))
-            body = self._card_base((rect.w, rect.h), card.color, alpha=int(220*fade))
+            body = self._card_cache.get(rect.w, rect.h, 24, card.color, alpha=int(220*fade))
             screen.blit(body, (rect.x + offset, rect.y))
 
     def update_transition(self, dt, screen):
         self.transition_time += dt
         t = clamp01(self.transition_time / self.transition_duration)
 
-        # Background
-        self.gradient_fill(screen, self.DARK_PURPLE, self.DARK_BLUE)
+        screen.blit(self._bg, (0, 0))
         self.update_squares(dt)
         self.draw_squares(screen)
 
         if self.transition_mode == "open":
-            # Stage: 0~0.22 POP, 0.22~1 MORPH
             t_pop = clamp01(t / 0.22)
             t_morph = clamp01((t - 0.22) / 0.78)
             self._draw_others_fade(screen, t)
@@ -443,75 +485,55 @@ class PlayCoreMenu(ScreenObject):
                 h = int(start.h * scale)
                 rect = pygame.Rect(0, 0, w, h)
                 rect.center = start.center
-                body = self._card_base((w, h), self.cards[self.selected_index].color, alpha=240, radius=24)
-                self._shine(body, t_pop*0.7)
-                body = pygame.transform.rotate(body, rot)
-                screen.blit(body, body.get_rect(center=rect.center))
+                body = self._card_cache.get(w, h, 24, self.cards[self.selected_index].color, alpha=240)
+                tmp = body.copy()
+                self._shine(tmp, t_pop*0.7)
+                tmp = pygame.transform.rotate(tmp, rot)
+                screen.blit(tmp, tmp.get_rect(center=rect.center))
             else:
                 start = self.transition_start_rect
                 end = self.transition_end_rect
                 et = ease_in_out_quad(t_morph)
                 now_rect = lerp_rect(start, end, et)
                 radius = max(12, int(24 * (1 - et*0.85)))
-                body = self._card_base((now_rect.w, now_rect.h), self.cards[self.selected_index].color, alpha=240, radius=radius)
-                self._shine(body, clamp01((t_morph - 0.15) / 0.6))
+                body = self._card_cache.get(now_rect.w, now_rect.h, radius, self.cards[self.selected_index].color, alpha=240)
+                tmp = body.copy()
+                self._shine(tmp, clamp01((t_morph - 0.15) / 0.6))
                 phase = (pygame.time.get_ticks()/1000.0) * 0.25
-                body.blit(self._diagonal_pattern((now_rect.w, now_rect.h), phase), (0, 0))
-                screen.blit(body, now_rect.topleft)
-
+                tmp.blit(self._diagonal_pattern((now_rect.w, now_rect.h), phase), (0, 0))
+                screen.blit(tmp, now_rect.topleft)
         else:
-            # ---------------- CLOSE: lift + reverse sheen + ghost trails + implode + ripple
-            # show carousel faintly (return feeling)
             self.draw_carousel(screen, (-1, -1))
-
             start = self.transition_start_rect
             end = self.transition_end_rect
-
-            # timing: 0~0.18 lift/tilt, 0.18~1 morph/land
             t_lift = clamp01(t / 0.18)
             t_morph = clamp01((t - 0.18) / 0.82)
             et = ease_in_out_quad(t_morph)
-
             now_rect = lerp_rect(start, end, et)
-            lift = int(lerp(-self.height * 0.035, 0, et))  # small lift at start
+            lift = int(lerp(-self.height * 0.035, 0, et))
             now_rect.centery += lift
-
             radius = max(12, int(24 * (1 - (et * 0.85))))
-            body = self._card_base((now_rect.w, now_rect.h), self.cards[self.selected_index].color, alpha=240, radius=radius)
-            # reverse sheen (right->left feel)
-            self._shine(body, 1.0 - clamp01((t_morph - 0.05) / 0.55))
+            base = self._card_cache.get(now_rect.w, now_rect.h, radius, self.cards[self.selected_index].color, alpha=240)
+            tmp = base.copy()
+            self._shine(tmp, 1.0 - clamp01((t_morph - 0.05) / 0.55))
             phase = (pygame.time.get_ticks()/1000.0) * 0.16
-            self._apply_round_mask(body, radius)
-            body.blit(self._diagonal_pattern((now_rect.w, now_rect.h), phase), (0, 0))
-
-            # ghost trails (3 layers)
+            self._apply_round_mask(tmp, radius)
+            tmp.blit(self._diagonal_pattern((now_rect.w, now_rect.h), phase), (0, 0))
             for g in range(1, 4):
                 gt = clamp01(et - g * 0.06)
                 if gt <= 0: continue
                 gr = lerp_rect(start, end, gt)
-                ghost = self._card_base((gr.w, gr.h), self.cards[self.selected_index].color,
-                                        alpha=int(80 * (1 - g/4)), radius=max(12, int(24 * (1 - (gt * 0.85)))))
+                ghost = self._card_cache.get(gr.w, gr.h, max(12, int(24 * (1 - (gt * 0.85)))), self.cards[self.selected_index].color, alpha=int(80 * (1 - g/4)))
                 screen.blit(ghost, (gr.x + (4-g)*4, gr.y + (4-g)*2))
-
-            # main body
-            screen.blit(body, now_rect.topleft)
-
-            # implode particles
+            screen.blit(tmp, now_rect.topleft)
             for sp in self.implode_sparks[:]:
                 sp.update(dt)
-                if sp.alive():
-                    sp.draw(screen)
-                else:
-                    self.implode_sparks.remove(sp)
-            
-            # vignette fades out while closing
+                if sp.alive(): sp.draw(screen)
+                else: self.implode_sparks.remove(sp)
             vig_alpha = int(160 * (1.0 - t))
             if vig_alpha > 0:
-                v = self.vignette.copy()
-                v.set_alpha(vig_alpha)
-                screen.blit(v, (0, 0))
+                v = self.vignette.copy(); v.set_alpha(vig_alpha); screen.blit(v, (0, 0))
 
-        # Sparks for open burst
         for sp in self.sparks[:]:
             sp.update(dt)
             if not sp.alive(): self.sparks.remove(sp)
@@ -520,46 +542,37 @@ class PlayCoreMenu(ScreenObject):
         if t >= 1.0:
             self.current_state = GameState.ENLARGED if self.transition_mode == "open" else GameState.MAIN_MENU
             if self.current_state == GameState.MAIN_MENU:
-                # reset effects
-                self.sparks.clear()
-                self.implode_sparks.clear()
+                self.sparks.clear(); self.implode_sparks.clear()
 
     # --------------------------- Enlarged mode -------------------------------
+    def _pulse_border(self, screen, rect, t, radius=28):
+        glow = int(80 + 60 * (0.5 + 0.5 * math.sin(t*2.2)))
+        stroke = pygame.Surface((rect.w+20, rect.h+20), pygame.SRCALPHA)
+        pygame.draw.rect(stroke, (255, 255, 255, glow), stroke.get_rect(), width=4, border_radius=radius)
+        screen.blit(stroke, (rect.x-10, rect.y-10))
+
     def draw_enlarged(self, screen):
-        # dim background
         dim = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
         dim.fill((0, 0, 0, 120))
         screen.blit(dim, (0, 0))
-
         rect = self._enlarged_target_rect()
         card = self.cards[self.selected_index]
         t = pygame.time.get_ticks() / 1000.0
         breathe = 1.0 + 0.012 * math.sin(t * 2.2)
         bw, bh = int(rect.w * breathe), int(rect.h * breathe)
         brect = pygame.Rect(0, 0, bw, bh); brect.center = rect.center
-
-        # pulse border glow
         self._pulse_border(screen, brect, t)
-
-        # body + pattern + gradient + sheen
-        body = self._card_base((bw, bh), card.color, alpha=240, radius=28)
+        body = self._card_cache.get(bw, bh, 28, card.color, alpha=240).copy()
         diag = self._diagonal_pattern((bw, bh), (t * 0.18) % 1.0)
         body.blit(diag, (0, 0))
-        grad = pygame.Surface((bw, bh), pygame.SRCALPHA)
-        for y in range(bh):
-            a = int(70 * (1 - y / max(1, bh)))
-            pygame.draw.line(grad, (255, 255, 255, a), (0, y), (bw, y))
+        grad = self._grad_cache.get(bw, bh, 28)
         body.blit(grad, (0, 0))
         self._shine(body, (math.sin(t*1.0) * 0.5 + 0.5))
         self._apply_round_mask(body, radius=28)
         screen.blit(body, brect.topleft)
-
-        # title
         title_surf = self.font.render(card.title, True, (255, 255, 255))
         title_rect = title_surf.get_rect(center=(brect.centerx, brect.top + int(bh*0.12)))
         screen.blit(title_surf, title_rect)
-
-        # chips (example)
         def chip(text, cx, cy):
             pad_x, pad_y = 16, 8
             chip_text = self.font.render(text, True, (20, 20, 30))
@@ -568,9 +581,8 @@ class PlayCoreMenu(ScreenObject):
             pygame.draw.rect(chip_surf, (255, 255, 255, 210), chip_surf.get_rect(), border_radius=18)
             pygame.draw.rect(chip_surf, (0, 0, 0, 35), chip_surf.get_rect(), width=2, border_radius=18)
             chip_surf.blit(chip_text, (pad_x, pad_y))
-            rect = chip_surf.get_rect(center=(cx, cy))
-            screen.blit(chip_surf, rect)
-
+            rect2 = chip_surf.get_rect(center=(cx, cy))
+            screen.blit(chip_surf, rect2)
         cy = title_rect.bottom + 30
         chip_spacing = 14
         chips = ["Single Play", "Casual", "New"]
@@ -587,12 +599,31 @@ class PlayCoreMenu(ScreenObject):
             cw = widths[i]
             chip(c, x + cw//2, cy)
             x += cw + chip_spacing
-
-        # footer hint
         hint = "Click outside or press Esc to close"
         hint_surf = self.font.render(hint, True, (230, 230, 235))
         hint_rect = hint_surf.get_rect(center=(brect.centerx, brect.bottom - int(bh*0.08)))
         screen.blit(hint_surf, hint_rect)
+
+    # ------------------------------- Scrollbar ------------------------------
+    def _draw_scrollbar(self, screen):
+        if self.max_scroll <= 1: return
+        track_w = int(self.width * 0.46)
+        track_h = 6
+        track_x = (self.width - track_w) // 2
+        track_y = int(self.height * 0.945)
+        bar = pygame.Surface((track_w, track_h), pygame.SRCALPHA)
+        TRACK_RGBA = (255, 255, 255, 24)
+        KNOB_RGBA  = (220, 230, 240, 110)
+        pygame.draw.rect(bar, TRACK_RGBA, (0, 0, track_w, track_h), border_radius=track_h//2)
+        # viewport/contents estimation
+        content_w = self.max_scroll + self.slot
+        view_w = self.slot
+        knob_w = max(40, int(track_w * (view_w / max(content_w, 1))))
+        p = 0.0 if self.max_scroll <= 0 else (self.scroll / self.max_scroll)
+        p = max(0.0, min(1.0, p))
+        knob_x = int((track_w - knob_w) * p)
+        pygame.draw.rect(bar, KNOB_RGBA, (knob_x, 0, knob_w, track_h), border_radius=track_h//2)
+        screen.blit(bar, (track_x, track_y))
 
     # ------------------------------- Input ----------------------------------
     def handle_input(self, event, dt):
@@ -602,11 +633,16 @@ class PlayCoreMenu(ScreenObject):
                 self.dragging = True
                 self.click_start_time = pygame.time.get_ticks() / 1000.0
                 self.total_drag_dist = 0.0
+                self._vel_samples.clear()
+                self._vel_samples.append((self.click_start_time, pygame.mouse.get_pos()[0]))
+                self.velocity = 0.0
+                self.pending_open_index = None
 
             elif event.type == pygame.MOUSEMOTION and self.dragging and self.mouse_down:
                 dx, _ = event.rel
                 self.scroll -= dx
                 self.total_drag_dist += abs(dx)
+                self._vel_samples.append((pygame.time.get_ticks()/1000.0, pygame.mouse.get_pos()[0]))
 
             elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                 self.mouse_down = False
@@ -619,15 +655,44 @@ class PlayCoreMenu(ScreenObject):
                     clicked = None
                     for i, r in enumerate(self.card_screen_rects):
                         if r.collidepoint(mx, my):
-                            clicked = i
-                            break
+                            clicked = i; break
                     if clicked is None:
                         clicked = round(self.scroll / self.slot)
 
-                    if clicked != round(self.scroll / self.slot):
+                    # 첫 번째 카드 → 되돌아가기 즉시 요청
+                    if clicked == 0:
+                        self.go_back_requested = True
+                        return
+
+                    # 클릭한 카드가 중앙에 정확히 오면 바로 오픈, 아니면 먼저 중앙으로 이동
+                    center_off = abs(self.scroll - clicked * self.slot)
+                    if center_off > self.CENTER_OPEN_EPS:
                         self.target_index = clicked
+                        self.pending_open_index = clicked
+                        self.velocity = 0.0  # 중앙 이동 즉시 시작 (딜레이 제거)
                     else:
                         self.start_transition(clicked, mode="open")
+                else:
+                    # compute release velocity (px/s)
+                    v = 0.0
+                    if len(self._vel_samples) >= 2:
+                        t0, x0 = self._vel_samples[0]
+                        t1, x1 = self._vel_samples[-1]
+                        dtv = max(1e-4, t1 - t0)
+                        v_mouse = (x1 - x0) / dtv
+                        v = -v_mouse  # scroll 좌표계 반전
+                    self._last_drag_dir = 1 if v > 0 else (-1 if v < 0 else 0)
+                    if abs(v) > self.INERTIA_START_V:
+                        self.velocity = max(-self.INERTIA_CAP, min(self.INERTIA_CAP, v))
+                        self.target_index = None
+                    else:
+                        # 느린 드래그는 근처에서만 스냅
+                        nearest = round(self.scroll / self.slot)
+                        target = nearest * self.slot
+                        if abs(self.scroll - target) <= self.SNAP_NEAR:
+                            self.target_index = nearest
+                        else:
+                            self.target_index = None
 
             elif event.type == pygame.KEYDOWN:
                 if event.key in (pygame.K_RIGHT, pygame.K_d):
@@ -657,33 +722,50 @@ class PlayCoreMenu(ScreenObject):
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    pygame.quit()
-                    sys.exit()
+                    pygame.quit(); sys.exit()
                 self.handle_input(event, dt)
+
+            # 되돌아가기 즉시 반환
+            if self.go_back_requested:
+                return ("BACK", screen)
 
             # inertial scroll + snap (main only)
             if self.current_state == GameState.MAIN_MENU:
                 prev_scroll = self.scroll
                 if not self.dragging:
-                    self.scroll += self.velocity * dt
-                    self.velocity *= (0.92 ** (dt * 60))
+                    # inertia motion
+                    if abs(self.velocity) > 0:
+                        self.scroll += self.velocity * dt
+                        # constant decel (빠르게 죽음, 역방향 튐 방지)
+                        if self.velocity > 0:
+                            self.velocity = max(0.0, self.velocity - self.INERTIA_DECEL * dt)
+                        else:
+                            self.velocity = min(0.0, self.velocity + self.INERTIA_DECEL * dt)
+                    # snap to target if set
+                    if self.target_index is not None:
+                        target = self.target_index * self.slot
+                        speed = 18.0 if self.pending_open_index is not None else 10.0
+                        self.scroll = lerp(self.scroll, target, min(speed * dt, 1.0))
+                        if abs(self.scroll - target) <= self.CENTER_OPEN_EPS:
+                            # 즉시 중앙 정렬 + 바로 오픈 (딜레이 제거)
+                            self.scroll = target
+                            idx_to_open = self.pending_open_index
+                            self.target_index = None
+                            if idx_to_open is not None:
+                                self.start_transition(idx_to_open, mode="open")
+                                self.pending_open_index = None
+                    elif abs(self.velocity) < 1.0:
+                        # no inertia → gentle near-snap only when close
+                        nearest = round(self.scroll / self.slot)
+                        target = nearest * self.slot
+                        if abs(self.scroll - target) <= self.SNAP_NEAR:
+                            self.scroll = lerp(self.scroll, target, min(8.0 * dt, 1.0))
                 else:
+                    # update velocity sample derivative continuously if needed
                     if dt > 0:
                         self.velocity = (self.scroll - prev_scroll) / dt
 
-                if not self.dragging:
-                    if self.target_index is not None:
-                        target = self.target_index * self.slot
-                        self.scroll = lerp(self.scroll, target, min(10.0 * dt, 1.0))
-                        if abs(self.scroll - target) < 0.5:
-                            self.scroll = target
-                            self.target_index = None
-                    else:
-                        if abs(self.velocity) < 10.0:
-                            nearest = round(self.scroll / self.slot)
-                            target = nearest * self.slot
-                            self.scroll = lerp(self.scroll, target, min(8.0 * dt, 1.0))
-
+                # bounds with easing & stop inertia at edges
                 if self.scroll < self.min_scroll:
                     self.scroll = lerp(self.scroll, self.min_scroll, min(12.0 * dt, 1.0))
                     if not self.dragging: self.velocity = 0.0
@@ -692,19 +774,17 @@ class PlayCoreMenu(ScreenObject):
                     if not self.dragging: self.velocity = 0.0
 
             # background
-            self.gradient_fill(screen, self.DARK_PURPLE, self.DARK_BLUE)
+            screen.blit(self._bg, (0, 0))
             self.update_squares(dt)
             self.draw_squares(screen)
 
             # render by state
             if self.current_state == GameState.MAIN_MENU:
                 self.draw_carousel(screen, pygame.mouse.get_pos())
-
+                self._draw_scrollbar(screen)
             elif self.current_state == GameState.TRANSITION:
                 self.update_transition(dt, screen)
-
             elif self.current_state == GameState.ENLARGED:
-                # keep carousel dimly visible under dim layer
                 self.draw_carousel(screen, (-1, -1))
                 self.draw_enlarged(screen)
 
@@ -717,8 +797,12 @@ class PlayCoreMenu(ScreenObject):
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
     WIDTH, HEIGHT = 1280, 720
-    screen = pygame.display.set_mode((WIDTH, HEIGHT))
-    pygame.display.set_caption("PlayCoreMenu — Card Enlarged Mode")
+    try:
+        screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.SCALED | pygame.DOUBLEBUF, vsync=1)
+    except TypeError:
+        screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    pygame.display.set_caption("PlayCoreMenu — Card Enlarged Mode (Optimized)")
 
     menu_screen = PlayCoreMenu(WIDTH, HEIGHT, show_fps=True)
-    menu_screen.loop(screen)
+    result = menu_screen.loop(screen)
+    # result가 ("BACK", screen) 이면 상위에서 이전 화면으로 전환 처리하면 됩니다.
