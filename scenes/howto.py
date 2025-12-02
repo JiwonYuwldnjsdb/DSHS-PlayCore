@@ -208,10 +208,46 @@ class PlayCoreMenu(ScreenObject):
         self.show_fps = show_fps
 
         font_size = int(self.height * 0.05)
+        # body font (smaller)
+        
         try:
             self.font = pygame.font.Font("data/fonts/SairaCondensed-Light.ttf", font_size)
         except:
             self.font = pygame.font.SysFont("arial", font_size)
+        
+        try:
+            self.body_font = pygame.font.Font("data/fonts/SairaCondensed-Light.ttf", int(self.height * 0.028))
+        except:
+            self.body_font = pygame.font.SysFont("arial", int(self.height * 0.028))
+
+        # game descriptions (EN only, plain)
+        self.game_desc = {
+            "Lynez": (
+                "How to Play:\n"
+                "Click to connect lines from the last point.\nThe ball bounces off lines. "
+                "Avoid lasers. Touching a wall or falling off the screen is game over.\n\n"
+                "Original: DaFluffyPotato\n"
+                "Remastered: Jiwon Yu"
+            ),
+            "Magic Cat Academy": (
+                "How to Play:\n"
+                "Draw the exact rune shown above each ghost with your mouse or finger. "
+                "Each correct stroke damages the ghost. Survive as long as possible.\n\n"
+                "Original: Google Doodles\n"
+                "Remastered: Jiwon Yu"
+            ),
+            "Airship": (
+                "How to Play:\n"
+                "Guide the airship with your finger.\nAvoid obstacles.\n\n"
+                "Original: Blob8108\n"
+                "Remastered: Yuseung Jang"
+            ),
+            # Optional: Home에 아무 내용 없을 때 기본 안내
+            "Home": (
+                "Select a card to read its description.\n"
+                "Click outside to go back."
+            ),
+        }
 
         # State
         self.current_state = GameState.MAIN_MENU
@@ -254,9 +290,45 @@ class PlayCoreMenu(ScreenObject):
         # Back flag (첫 번째 카드 클릭 시 되돌아가기)
         self.go_back_requested = False
 
+        # Long-press (Lynez 스타일 씬 탈출)
+        self.longpress_down = False
+        self.longpress_frames = 0
+        self.LONGPRESS_THRESHOLD = 240  # 60fps 기준 약 4초
+
+    def _wrap_text(self, text, font, max_width):
+        """Returns list of wrapped lines for the given width (keeps manual newlines)."""
+        lines = []
+        for raw_line in text.split("\n"):
+            words = raw_line.split(" ")
+            if not words:
+                lines.append("")
+                continue
+            cur = words[0]
+            for w in words[1:]:
+                test = cur + " " + w
+                if font.size(test)[0] <= max_width:
+                    cur = test
+                else:
+                    lines.append(cur)
+                    cur = w
+            lines.append(cur)
+        return lines
+
+    def _draw_text_in_rect(self, screen, text, rect, font, color=(245, 245, 250)):
+        """Draw wrapped text inside rect; stops at bottom edge to keep inside the card."""
+        line_h = int(font.get_linesize() * 1.1)
+        y = rect.top
+        wrapped = self._wrap_text(text, font, rect.width)
+        for ln in wrapped:
+            if y + line_h > rect.bottom:
+                break  # prevent overflow
+            surf = font.render(ln, True, color)
+            screen.blit(surf, (rect.left, y))
+            y += line_h
+
     # ---------------------------- Setup -------------------------------------
     def setup_cards(self):
-        titles = ["Home", "Game 1", "Game 2", "Game 3", "Game 4", "Game 5", "Game 6"]
+        titles = ["Home", "Lynez", "Magic Cat Academy", "Airship"]
         base_colors = [
             (35, 90, 160),
             (190, 120, 60),
@@ -552,56 +624,65 @@ class PlayCoreMenu(ScreenObject):
         screen.blit(stroke, (rect.x-10, rect.y-10))
 
     def draw_enlarged(self, screen):
+        # dim background
         dim = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
         dim.fill((0, 0, 0, 120))
         screen.blit(dim, (0, 0))
+
         rect = self._enlarged_target_rect()
         card = self.cards[self.selected_index]
+
+        # subtle breathing
         t = pygame.time.get_ticks() / 1000.0
         breathe = 1.0 + 0.012 * math.sin(t * 2.2)
         bw, bh = int(rect.w * breathe), int(rect.h * breathe)
         brect = pygame.Rect(0, 0, bw, bh); brect.center = rect.center
-        self._pulse_border(screen, brect, t)
+
+        # border pulse
+        glow = int(80 + 60 * (0.5 + 0.5 * math.sin(t*2.2)))
+        stroke = pygame.Surface((brect.w+20, brect.h+20), pygame.SRCALPHA)
+        pygame.draw.rect(stroke, (255, 255, 255, glow), stroke.get_rect(), width=4, border_radius=28)
+        screen.blit(stroke, (brect.x-10, brect.y-10))
+
+        # card body
         body = self._card_cache.get(bw, bh, 28, card.color, alpha=240).copy()
+        # light pattern & grad (은은하게만)
         diag = self._diagonal_pattern((bw, bh), (t * 0.18) % 1.0)
         body.blit(diag, (0, 0))
-        grad = self._grad_cache.get(bw, bh, 28)
-        body.blit(grad, (0, 0))
+        body.blit(self._grad_cache.get(bw, bh, 28), (0, 0))
         self._shine(body, (math.sin(t*1.0) * 0.5 + 0.5))
         self._apply_round_mask(body, radius=28)
         screen.blit(body, brect.topleft)
+
+        # title
         title_surf = self.font.render(card.title, True, (255, 255, 255))
-        title_rect = title_surf.get_rect(center=(brect.centerx, brect.top + int(bh*0.12)))
+        title_rect = title_surf.get_rect(center=(brect.centerx, brect.top + int(bh*0.10)))
         screen.blit(title_surf, title_rect)
-        def chip(text, cx, cy):
-            pad_x, pad_y = 16, 8
-            chip_text = self.font.render(text, True, (20, 20, 30))
-            w, h = chip_text.get_width()+pad_x*2, chip_text.get_height()+pad_y*2
-            chip_surf = pygame.Surface((w, h), pygame.SRCALPHA)
-            pygame.draw.rect(chip_surf, (255, 255, 255, 210), chip_surf.get_rect(), border_radius=18)
-            pygame.draw.rect(chip_surf, (0, 0, 0, 35), chip_surf.get_rect(), width=2, border_radius=18)
-            chip_surf.blit(chip_text, (pad_x, pad_y))
-            rect2 = chip_surf.get_rect(center=(cx, cy))
-            screen.blit(chip_surf, rect2)
-        cy = title_rect.bottom + 30
-        chip_spacing = 14
-        chips = ["Single Play", "Casual", "New"]
-        total_w = 0
-        widths = []
-        for c in chips:
-            tw = self.font.size(c)[0] + 32
-            widths.append(tw)
-            total_w += tw
-        total_w += chip_spacing*(len(chips)-1)
-        start_x = brect.centerx - total_w//2
-        x = start_x
-        for i, c in enumerate(chips):
-            cw = widths[i]
-            chip(c, x + cw//2, cy)
-            x += cw + chip_spacing
+
+        # content area (카드 밖으로 나가지 않도록 패딩)
+        pad_x = int(bw * 0.08)
+        pad_top = int(bh * 0.15)
+        content_rect = pygame.Rect(
+            brect.left + pad_x,
+            title_rect.bottom + int(bh * 0.04),
+            bw - pad_x*2,
+            brect.bottom - (title_rect.bottom + int(bh * 0.04)) - pad_top
+        )
+
+        # description text (plain EN)
+        text = self.game_desc.get(card.title, "No description.")
+        self._draw_text_in_rect(screen, text, content_rect, self.body_font, (245, 245, 250))
+
+        # small hint at bottom inside the card (간단하게)
         hint = "Click outside or press Esc to close"
-        hint_surf = self.font.render(hint, True, (230, 230, 235))
-        hint_rect = hint_surf.get_rect(center=(brect.centerx, brect.bottom - int(bh*0.08)))
+        hint_surf = self.body_font.render(hint, True, (230, 230, 235))
+        hint_rect = hint_surf.get_rect()
+        hint_rect.midbottom = (brect.centerx, brect.bottom - int(bh * 0.04))
+        # 카드 밖으로 나가지 않도록 체크
+        if hint_rect.left < brect.left + 8:
+            hint_rect.left = brect.left + 8
+        if hint_rect.right > brect.right - 8:
+            hint_rect.right = brect.right - 8
         screen.blit(hint_surf, hint_rect)
 
     # ------------------------------- Scrollbar ------------------------------
@@ -627,6 +708,21 @@ class PlayCoreMenu(ScreenObject):
 
     # ------------------------------- Input ----------------------------------
     def handle_input(self, event, dt):
+        # ----- 공통: 롱프레스 상태 처리 -----
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            self.longpress_down = True
+            self.longpress_frames = 0
+
+        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            # 롱프레스가 이미 발동된 상태라면, 클릭/드래그 로직은 막고 리셋만
+            if self.longpress_frames >= self.LONGPRESS_THRESHOLD:
+                self.longpress_down = False
+                self.longpress_frames = 0
+                return
+            self.longpress_down = False
+            self.longpress_frames = 0
+
+        # ----- 상태별 입력 처리 -----
         if self.current_state == GameState.MAIN_MENU:
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 self.mouse_down = True
@@ -716,6 +812,13 @@ class PlayCoreMenu(ScreenObject):
             dt_ms = clock.tick(60)
             dt = dt_ms / 1000.0
 
+            # ----- 롱프레스 카운트 & 씬 탈출 트리거 -----
+            if self.longpress_down:
+                self.longpress_frames += 1
+                if (self.current_state == GameState.MAIN_MENU and
+                    self.longpress_frames >= self.LONGPRESS_THRESHOLD):
+                    self.go_back_requested = True
+
             self.frame_count += 1
             if self.frame_count % self.spawn_rate == 0:
                 self.spawn_squares()
@@ -727,7 +830,7 @@ class PlayCoreMenu(ScreenObject):
 
             # 되돌아가기 즉시 반환
             if self.go_back_requested:
-                return ("BACK", screen)
+                return (0, screen)
 
             # inertial scroll + snap (main only)
             if self.current_state == GameState.MAIN_MENU:
@@ -787,6 +890,22 @@ class PlayCoreMenu(ScreenObject):
             elif self.current_state == GameState.ENLARGED:
                 self.draw_carousel(screen, (-1, -1))
                 self.draw_enlarged(screen)
+
+            # 롱프레스 진행 원 (Lynez 스타일)
+            if self.longpress_down and self.longpress_frames >= 60:
+                mx, my = pygame.mouse.get_pos()
+                radius = self.height / 60
+                rect = (mx - radius, my - radius, radius * 2, radius * 2)
+                start_angle = math.radians(0)
+                end_angle = math.radians(min(self.longpress_frames * 2 - 120, 360))
+                pygame.draw.arc(
+                    screen,
+                    (255, 255, 255),
+                    rect,
+                    start_angle,
+                    end_angle,
+                    max(int(self.height / 200), 2)
+                )
 
             if self.show_fps:
                 blit_fps(screen, clock)

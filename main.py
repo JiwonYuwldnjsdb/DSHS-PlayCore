@@ -2,7 +2,7 @@ import pygame
 import sys
 from localLibraries.PlayCoreLibraries import fade_out
 
-from scenes import Lynez, MagicCatAcademy, Airship, AvoidMine
+from scenes import Lynez, MagicCatAcademy, Airship, howto
 import PlayCore
 
 def main():
@@ -20,7 +20,7 @@ def main():
         "Lynez" : 1,
         "Magic Cat Academy" : 2,
         "Airship" : 3,
-        "Avoid Mine" : 4
+        "How To" : 4
     }
     
     """
@@ -28,7 +28,6 @@ def main():
     1 : Lynez
     2 : Magic Cat Academy
     3 : Airship
-    4 : Avoid Mine
     """
     
     while running:
@@ -72,8 +71,18 @@ def main():
             pygame.time.wait(500)
             fade_out(screen, curr_screen_surface, WIDTH, HEIGHT)
         
+        # elif curr_screen_idx == 4:
+        #     curr_screen = AvoidMine.AvoidMineScreen(WIDTH, HEIGHT)
+            
+        #     next_screen, curr_screen_surface = curr_screen.loop(screen)
+            
+        #     curr_screen_idx = games[next_screen]
+            
+        #     pygame.time.wait(500)
+        #     fade_out(screen, curr_screen_surface, WIDTH, HEIGHT)
+        
         elif curr_screen_idx == 4:
-            curr_screen = AvoidMine.AvoidMineScreen(WIDTH, HEIGHT)
+            curr_screen = howto.PlayCoreMenu(WIDTH, HEIGHT)
             
             next_screen, curr_screen_surface = curr_screen.loop(screen)
             

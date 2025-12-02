@@ -259,7 +259,7 @@ class PlayCoreMenu(ScreenObject):
 
         # Tiles: Quick tips + 기존 + 더미
         base = [
-            {"title": "Quick tips", "color": (20, 50, 100)},
+            {"title": "How To", "color": (20, 50, 100)},
             {"title": "Lynez", "color": (40, 80, 130)},
             {"title": "Magic Cat Academy", "color": (40, 80, 130)},
             {"title": "Airship", "color": (40, 80, 130)}
@@ -529,9 +529,9 @@ class PlayCoreMenu(ScreenObject):
 
     # ------------------------------- Input ----------------------------------
     def _open_confirm_modal(self, title):
-        if title.lower().startswith("quick"):
-            mtitle = "Proceed to Quick tips?"
-            msg = "Open Quick tips now."
+        if title.lower().startswith("how"):
+            mtitle = "Proceed to How To?"
+            msg = "Open How To now."
             yes = "Yes"
         else:
             mtitle = f"Play {title}?"
