@@ -569,8 +569,8 @@ class LynezMainScreen(ScreenObject):
                 mouse_down_frames += 1
                 if mouse_down_frames >= 60:
                     pygame.draw.arc(screen, (255, 255, 255),
-                            (pygame.mouse.get_pos()[0]-self.height/60,
-                            pygame.mouse.get_pos()[1]-self.height/60, self.height/60*2, self.height/60*2), 
+                            (pygame.mouse.get_pos()[0]-self.height/20,
+                            pygame.mouse.get_pos()[1]-self.height/20, self.height/20*2, self.height/20*2), 
                             math.radians(0), math.radians(min(mouse_down_frames*2-120, 360)), self.lines.width)
             else:
                 mouse_up_frames += 1

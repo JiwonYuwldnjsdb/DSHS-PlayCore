@@ -491,10 +491,7 @@ class TitleScreen(ScreenObject):
             
             self.background_imgs.append(img)
         
-        self.background_img_pos = (
-            (self.width - img.get_width()) / 2,
-            (self.height - img.get_height()) / 2
-        )
+        self.background_img_pos = (0,0)
         
         self.text_background_imgs = []
         
@@ -591,8 +588,8 @@ class TitleScreen(ScreenObject):
                 mouse_down_frames += 1
                 if mouse_down_frames >= 60:
                     pygame.draw.arc(screen, (255, 255, 255),
-                            (pygame.mouse.get_pos()[0]-self.height/60,
-                            pygame.mouse.get_pos()[1]-self.height/60, self.height/60*2, self.height/60*2), 
+                            (pygame.mouse.get_pos()[0]-self.height/20,
+                            pygame.mouse.get_pos()[1]-self.height/20, self.height/20*2, self.height/20*2), 
                             math.radians(0), math.radians(min(mouse_down_frames*2-120, 360)), 5)
             else:
                 mouse_up_frames += 1
@@ -1010,6 +1007,7 @@ class MagicCatAcademyLoadingScreen:
 
         self.white = (255, 255, 255)
         self.dark_gray = (45, 48, 56)
+        self.darker_gray = (12, 13, 15)
         self.gray = (32, 33, 36)
         
         self.button_color = list(self.dark_gray)
@@ -1140,7 +1138,7 @@ class MagicCatAcademyLoadingScreen:
                     self.button_color[i] -= (self.white[i] - self.dark_gray[i])*0.05
                     self.button_color[i] = max(self.dark_gray[i], self.button_color[i])
 
-            screen.fill(self.gray)
+            screen.fill(self.darker_gray)
             
             screen.blit(self.background_img, self.background_img_pos)
             

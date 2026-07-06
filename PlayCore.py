@@ -2,6 +2,7 @@ import pygame
 import random
 import sys
 import math
+import os
 from typing import Dict, List, Tuple
 from collections import deque
 
@@ -10,12 +11,44 @@ from localLibraries.PlayCoreLibraries import ScreenObject, blit_fps
 pygame.init()
 
 # ----------------------------- Tunables ------------------------------------
-SHINE_ENABLED   = False   # 반짝(샤인) 기본 끔
-PATTERN_ALPHA   = 10      # 줄무늬 밝기 (8~16 권장)
-PATTERN_GAP_K   = 0.22    # 줄무늬 간격 비율
-PATTERN_SPEED   = 0.08    # 줄무늬 속도 (느리게)
-PATTERN_ANGLE   = -20     # 줄무늬 각도(도)
-PATTERN_FRAMES  = 24      # 패턴 애니메이션 프레임 수(프리컴퓨트)
+# Nebula background version
+# 배경 이미지는 아래 경로에 둔다. 이 파일과 같은 프로젝트 루트 기준.
+MENU_BACKGROUND_IMAGE = "data/menu/background.png"
+
+def asset_path(path: str | None) -> str | None:
+    """상대 경로를 이 py 파일 기준으로 안정적으로 변환."""
+    if not path:
+        return None
+    if os.path.isabs(path):
+        return path
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), path)
+
+# Clean redesign notes
+# - Layout is unchanged. Only the visual skin was redesigned.
+# - Menu image sizes at WIDTH=1280, HEIGHT=720:
+#   * How To / large tile: 240 x 240 px
+#   * Game tile: 302 x 144 px
+# - General formula:
+#   * large tile = H/3 x H/3
+#   * game tile  = (2H/5 + H/50) x H/5
+# - Images are center-cropped automatically. If the file is missing, the tile
+#   uses its fallback solid color, so you can add images later.
+SHINE_ENABLED   = False
+PATTERN_ALPHA   = 0       # 줄무늬 제거: 이미지/단색 카드만 보이게 함
+PATTERN_GAP_K   = 0.32
+PATTERN_SPEED   = 0.0
+PATTERN_ANGLE   = -18
+PATTERN_FRAMES  = 1
+
+# 업로드한 우주/성운 배경에 맞춘 저채도 다크 네이비 팔레트.
+# 너무 쨍한 네온을 피하고, 배경의 파란빛만 은은하게 이어받는다.
+MODERN_BG_TOP       = (3, 7, 18)
+MODERN_BG_BOTTOM    = (1, 4, 12)
+MODERN_PANEL        = (18, 25, 38)
+MODERN_TEXT         = (238, 243, 250)
+MODERN_MUTED_TEXT   = (132, 148, 172)
+MODERN_ACCENT       = (126, 152, 190)
+MODERN_ACCENT_2     = (54, 73, 104)
 
 # ----------------------------- Background Squares --------------------------
 class Square:
@@ -26,9 +59,9 @@ class Square:
         self.speed = speed
         self.angle_speed = angle_speed
         self.angle = 0
-        self.alpha = 15.0
+        self.alpha = 0.0
         surf = pygame.Surface((size, size), pygame.SRCALPHA)
-        surf.fill((255, 255, 255, int(self.alpha)))
+        surf.fill((180, 180, 170, int(self.alpha)))
         # convert_alpha로 포맷 고정 (속도향상)
         self.surface = surf.convert_alpha()
 
@@ -37,7 +70,7 @@ class Square:
         self.angle = (self.angle + self.angle_speed * dt) % 360
         self.alpha = max(0.0, self.alpha - 1.2 * dt)
         # alpha만 업데이트 → 새 Surface 생성 없이 fill
-        self.surface.fill((255, 255, 255, int(self.alpha)))
+        self.surface.fill((180, 180, 170, int(self.alpha)))
 
     def draw(self, screen):
         # 회전은 비용이 큼 → 개수는 작고, 나머지 최적화로 여유 확보
@@ -70,22 +103,30 @@ class ShadowCache:
         key = (w, h, radius)
         sh = self.cache.get(key)
         if sh is None:
-            sh = pygame.Surface((w+18, h+18), pygame.SRCALPHA)
-            pygame.draw.rect(sh, (0, 0, 0, 80), sh.get_rect(), border_radius=radius+6)
-            self.cache[key] = sh
+            # Soft layered shadow: modern card 느낌. Blur 없이도 충분히 부드럽게 보이도록
+            # 여러 알파 레이어를 겹친다.
+            pad = 30
+            sh = pygame.Surface((w + pad * 2, h + pad * 2), pygame.SRCALPHA)
+            for k, alpha in enumerate((20, 13, 8, 4)):
+                inset = k * 6
+                rect = pygame.Rect(inset, inset, w + pad * 2 - inset * 2, h + pad * 2 - inset * 2)
+                pygame.draw.rect(sh, (0, 2, 10, alpha), rect, border_radius=radius + 18)
+            self.cache[key] = sh.convert_alpha()
         return sh
 
 class CardBodyCache:
     def __init__(self):
         self.cache: Dict[Tuple[int,int,int,Tuple[int,int,int],int], pygame.Surface] = {}
-    def get(self, w, h, radius, color, alpha=228):
+    def get(self, w, h, radius, color, alpha=245):
         key = (w, h, radius, color, alpha)
         body = self.cache.get(key)
         if body is None:
             body = pygame.Surface((w, h), pygame.SRCALPHA)
             pygame.draw.rect(body, (*color, alpha), (0, 0, w, h), border_radius=radius)
-            pygame.draw.rect(body, (255, 255, 255, 36), (0, 0, w, h), width=2, border_radius=radius)
-            self.cache[key] = body
+            # glass highlight border
+            pygame.draw.rect(body, (210, 225, 245, 20), (0, 0, w, h), width=1, border_radius=radius)
+            pygame.draw.rect(body, (0, 0, 0, 30), (1, 1, w - 2, h - 2), width=1, border_radius=max(0, radius - 1))
+            self.cache[key] = body.convert_alpha()
         return body
 
 class GradOverlayCache:
@@ -97,7 +138,7 @@ class GradOverlayCache:
         if g is None:
             grad = pygame.Surface((w, h), pygame.SRCALPHA)
             for y in range(h):
-                a = int(40 * (1 - y / max(1, h)))
+                a = int(6 * (1 - y / max(1, h)))
                 pygame.draw.line(grad, (255, 255, 255, a), (0, y), (w, y))
             # 라운드 마스크 적용으로 모서리 누락 이슈 해결
             mask = RoundMaskCache().get(w, h, radius)
@@ -122,7 +163,7 @@ class PatternFramesCache:
             pad = diag_hyp // 2 + 2
             canvas = pygame.Surface((w + pad*2, h + pad*2), pygame.SRCALPHA)
             offset = int((phase % 1.0) * gap)
-            col = (255, 255, 255, alpha)
+            col = (235, 238, 245, alpha)
             for x in range(-diag_hyp, w + diag_hyp, gap):
                 pygame.draw.line(canvas, col, (x + offset, 0), (x - diag_hyp + offset, h + diag_hyp), 1)
             canvas = pygame.transform.rotate(canvas, angle_deg)
@@ -136,6 +177,67 @@ class PatternFramesCache:
             frames.append(strip.convert_alpha())
         self.cache[key] = frames
         return frames
+
+
+class TileVisualCache:
+    """Builds image-backed menu cards. Missing image => solid fallback color."""
+    def __init__(self, mask_cache: RoundMaskCache):
+        self.cache: Dict[Tuple[str, int, int, int, Tuple[int, int, int]], pygame.Surface] = {}
+        self.mask_cache = mask_cache
+
+    def _cover_scale(self, surf: pygame.Surface, w: int, h: int) -> pygame.Surface:
+        sw, sh = surf.get_size()
+        if sw <= 0 or sh <= 0:
+            fallback = pygame.Surface((w, h), pygame.SRCALPHA)
+            fallback.fill((38, 38, 38, 255))
+            return fallback
+
+        scale = max(w / sw, h / sh)
+        nw, nh = max(1, int(sw * scale)), max(1, int(sh * scale))
+        scaled = pygame.transform.smoothscale(surf, (nw, nh))
+        cropped = pygame.Surface((w, h), pygame.SRCALPHA)
+        cropped.blit(scaled, ((w - nw) // 2, (h - nh) // 2))
+        return cropped
+
+    def get(self, image_path: str | None, w: int, h: int, radius: int, fallback_color: Tuple[int, int, int]) -> pygame.Surface:
+        key = (image_path or "__solid__", w, h, radius, fallback_color)
+        cached = self.cache.get(key)
+        if cached is not None:
+            return cached
+
+        surface = pygame.Surface((w, h), pygame.SRCALPHA)
+        loaded = None
+        if image_path:
+            try:
+                loaded = pygame.image.load(asset_path(image_path)).convert_alpha()
+            except Exception:
+                loaded = None
+
+        if loaded is not None:
+            surface.blit(self._cover_scale(loaded, w, h), (0, 0))
+        else:
+            # Image가 없으면 임시 단색 배경.
+            surface.fill((*fallback_color, 255))
+
+        # 이미지 위 하단 가독성용 반투명 회색 그라데이션.
+        # 위쪽은 거의 그대로 두고, 아래쪽으로 갈수록 더 진해지게 함.
+        bottom_gradient = pygame.Surface((w, h), pygame.SRCALPHA)
+        for y in range(h):
+            t = y / max(1, h - 1)
+            # 카드 높이의 약 35% 지점부터 서서히 어두워지고,
+            # 하단 텍스트 영역은 더 진한 회색 필름이 깔림.
+            p = max(0.0, (t - 0.2) / 0.8)
+            a = min(255,int(100 + 150 * (p ** 1.7)))
+            pygame.draw.line(bottom_gradient, (28, 29, 34, a), (0, y), (w, y), 10)
+        surface.blit(bottom_gradient, (0, 0))
+
+        # rounded mask + clean modern outline
+        mask = self.mask_cache.get(w, h, radius)
+        surface.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+        pygame.draw.rect(surface, (215, 230, 255, 24), (0, 0, w, h), width=1, border_radius=radius)
+        self.cache[key] = surface.convert_alpha()
+        return self.cache[key]
+
 
 # ------------------------------ Modal Dialog --------------------------------
 class ModalDialog:
@@ -175,17 +277,20 @@ class ModalDialog:
         self._dim.fill((0, 0, 0, 140))
 
         # 그림자/본체
-        self._shadow = pygame.Surface((self.rect.w+24, self.rect.h+24), pygame.SRCALPHA)
-        pygame.draw.rect(self._shadow, (0, 0, 0, 120), self._shadow.get_rect(), border_radius=32)
+        self._shadow = pygame.Surface((self.rect.w + 52, self.rect.h + 52), pygame.SRCALPHA)
+        for k, alpha in enumerate((38, 24, 14, 8)):
+            inset = k * 8
+            rect = pygame.Rect(inset, inset, self.rect.w + 52 - inset * 2, self.rect.h + 52 - inset * 2)
+            pygame.draw.rect(self._shadow, (0, 0, 0, alpha), rect, border_radius=34)
 
         self._body = pygame.Surface((self.rect.w, self.rect.h), pygame.SRCALPHA)
-        menu.gradient_fill(self._body, (55, 77, 118), (20, 50, 100))
+        menu.gradient_fill(self._body, (21, 31, 48), (9, 15, 27))
         self.menu._apply_round_mask(self._body, radius=26)
-        pygame.draw.rect(self._body, (255, 255, 255, 35), self._body.get_rect(), width=2, border_radius=26)
+        pygame.draw.rect(self._body, (210, 225, 245, 26), self._body.get_rect(), width=1, border_radius=26)
 
         # 텍스트 사전 렌더
-        self._title_s = self.title_font.render(self.title, True, (255, 255, 255))
-        self._msg_s = self.text_font.render(self.message, True, (230, 230, 235))
+        self._title_s = self.title_font.render(self.title, True, MODERN_TEXT)
+        self._msg_s = self.text_font.render(self.message, True, MODERN_MUTED_TEXT)
 
         # 버튼 비트맵 (hover on/off)
         self._btn_yes_normal = self._render_button(self.btn_yes.size, self.yes_text, False)
@@ -195,11 +300,11 @@ class ModalDialog:
 
     def _render_button(self, size, text, hovered):
         w, h = size
-        base = (180, 180, 180, 230) if hovered else (255, 255, 255, 210)
+        base = (204, 216, 235, 225) if hovered else (158, 177, 205, 190)
         surf = pygame.Surface((w, h), pygame.SRCALPHA)
         pygame.draw.rect(surf, base, (0, 0, w, h), border_radius=18)
-        pygame.draw.rect(surf, (0, 0, 0, 35), (0, 0, w, h), width=2, border_radius=18)
-        ts = self.text_font.render(text, True, (20, 20, 30))
+        pygame.draw.rect(surf, (255, 255, 255, 42), (0, 0, w, h), width=1, border_radius=18)
+        ts = self.text_font.render(text, True, (8, 13, 24))
         tr = ts.get_rect(center=(w//2, h//2))
         surf.blit(ts, tr)
         return surf.convert_alpha()
@@ -208,7 +313,7 @@ class ModalDialog:
         # 배경 딤
         screen.blit(self._dim, (0, 0))
         # 그림자 + 본체
-        screen.blit(self._shadow, (self.rect.x-12, self.rect.y-10))
+        screen.blit(self._shadow, (self.rect.x - 26, self.rect.y - 24))
         screen.blit(self._body, self.rect.topleft)
 
         # 텍스트
@@ -242,29 +347,56 @@ class ModalDialog:
 
 # --------------------------------- Menu ------------------------------------
 class PlayCoreMenu(ScreenObject):
-    DARK_BLUE   = (10, 10, 40)
-    DARK_PURPLE = (40, 10, 70)
+    DARK_BLUE   = MODERN_BG_BOTTOM
+    DARK_PURPLE = MODERN_BG_TOP
 
     def __init__(self, width, height, show_fps=False):
         super().__init__(width, height)
         self.show_fps = show_fps
 
         # Fonts
-        self.fontH1 = pygame.font.Font("data/fonts/SairaCondensed-Light.ttf", 48)
-        self.fontP  = pygame.font.Font("data/fonts/SairaCondensed-Light.ttf", 24)
+        self.fontH1 = pygame.font.Font("data/fonts/SairaCondensed-Light.ttf", 50)
+        self.fontP  = pygame.font.Font("data/fonts/SairaCondensed-Light.ttf", 25)
+        self.fontSmall = pygame.font.Font("data/fonts/SairaCondensed-Light.ttf", 18)
 
         # Title text (사전 렌더)
-        self.title_text_surface = self.fontH1.render("DSHS PlayCore", True, (255, 255, 255))
-        self.small_title_text_surface = self.fontP.render("Made by STATIC Jiwon Yu & Yuseung Jang", True, (255, 255, 255))
+        self.title_text_surface = self.fontH1.render("DSHS PlayCore", True, MODERN_TEXT)
+        self.small_title_text_surface = self.fontP.render("Made by STATIC Jiwon Yu & Yuseung Jang", True, MODERN_MUTED_TEXT)
 
-        # Tiles: Quick tips + 기존 + 더미
+        # Tiles: 배치는 그대로, visual skin만 새로 적용.
+        # image가 없거나 경로가 틀리면 fallback_color 단색 배경으로 자동 대체된다.
         base = [
-            {"title": "How To", "color": (20, 50, 100)},
-            {"title": "Lynez", "color": (40, 80, 130)},
-            {"title": "Magic Cat Academy", "color": (40, 80, 130)},
-            {"title": "Airship", "color": (40, 80, 130)}
+            {
+                "title": "How To",
+                "image": "data/menu/background.png",
+                "fallback_color": (23, 34, 52),
+                "eyebrow": "Guide"
+            },
+            {
+                "title": "Lynez",
+                "image": "data/menu/lynez.png",
+                "fallback_color": (28, 38, 55),
+                "eyebrow": "Puzzle"
+            },
+            {
+                "title": "Magic Cat Academy",
+                "image": "data/menu/magic_cat_academy.png",
+                "fallback_color": (34, 33, 50),
+                "eyebrow": "Arcade"
+            },
+            {
+                "title": "Airship",
+                "image": "data/menu/airship.png",
+                "fallback_color": (24, 42, 52),
+                "eyebrow": "Action"
+            }
         ]
-        # dummies = [{"title": f"Game {i}", "color": (40 + (i*15)%120, 80, 130)} for i in range(6, 22)]
+        # dummies = [{
+        #     "title": f"Game {i}",
+        #     "image": f"data/images/menu/game_{i}.png",
+        #     "fallback_color": (40 + (i*15)%120, 80, 130),
+        #     "eyebrow": "Game"
+        # } for i in range(6, 22)]
         self.tiles = base #+ dummies
 
         # 타일별 줄무늬 애니 위상/속도 랜덤
@@ -291,7 +423,7 @@ class PlayCoreMenu(ScreenObject):
 
         # Background squares
         self.squares: List[Square] = []
-        self.spawn_rate = 30
+        self.spawn_rate = 999999  # clean 버전에서는 배경 사각형 애니메이션 비활성화
         self.frame_count = 0
 
         # Modal
@@ -304,17 +436,18 @@ class PlayCoreMenu(ScreenObject):
         self._card_body_cache = CardBodyCache()
         self._grad_overlay_cache = GradOverlayCache()
         self._pattern_frames_cache = PatternFramesCache()
+        self._tile_visual_cache = TileVisualCache(self._mask_cache)
 
         # 배경 그라디언트(고정) 사전 생성
-        self._bg = pygame.Surface((self.width, self.height)).convert()
-        self.gradient_fill(self._bg, self.DARK_PURPLE, self.DARK_BLUE)
+        self._bg = self._render_modern_background()
 
         # 타일 정적 자산 프리컴퓨트 (기본 크기+hover 크기)
         self._tile_assets: Dict[int, Dict[str, object]] = {}
         self._precompute_tile_assets()
 
-        # 타일 제목 텍스트 사전 렌더
-        self._tile_title_surf = [self.fontP.render(t["title"], True, (255, 255, 255)) for t in self.tiles]
+        # 타일 텍스트 사전 렌더
+        self._tile_title_surf = [self.fontP.render(t["title"], True, MODERN_TEXT) for t in self.tiles]
+        self._tile_eyebrow_surf = [self.fontSmall.render(t.get("eyebrow", "Game").upper(), True, (150, 170, 198)) for t in self.tiles]
 
     # ----------------------------- Layout -----------------------------------
     def _build_layout_flow_offset(self):
@@ -389,6 +522,67 @@ class PlayCoreMenu(ScreenObject):
     def _tile_shadow(self, rect, radius=24):
         return self._shadow_cache.get(rect.w, rect.h, radius)
 
+    def _cover_scale_to_surface(self, src: pygame.Surface, w: int, h: int) -> pygame.Surface:
+        """이미지를 화면/카드 크기에 꽉 차게 center-crop."""
+        sw, sh = src.get_size()
+        if sw <= 0 or sh <= 0:
+            out = pygame.Surface((w, h)).convert()
+            self.gradient_fill(out, self.DARK_PURPLE, self.DARK_BLUE)
+            return out
+        scale = max(w / sw, h / sh)
+        nw, nh = max(1, int(sw * scale)), max(1, int(sh * scale))
+        scaled = pygame.transform.smoothscale(src, (nw, nh))
+        out = pygame.Surface((w, h)).convert()
+        out.blit(scaled, ((w - nw) // 2, (h - nh) // 2))
+        return out
+
+    def _render_modern_background(self):
+        """업로드한 성운 배경 이미지를 메뉴 배경으로 사용.
+
+        배경 경로: data/images/menu/background_nebula.png
+        이미지가 없으면 조용한 다크 네이비 그라디언트로 대체된다.
+        """
+        try:
+            raw = pygame.image.load(asset_path(MENU_BACKGROUND_IMAGE)).convert()
+            bg = self._cover_scale_to_surface(raw, self.width, self.height)
+        except Exception:
+            bg = pygame.Surface((self.width, self.height)).convert()
+            self.gradient_fill(bg, self.DARK_PURPLE, self.DARK_BLUE)
+
+        # 배경 자체가 예쁘므로, UI 가독성을 위한 얇은 필름만 올린다.
+        dim = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+        dim.fill((0, 0, 0, 26))
+        bg.blit(dim, (0, 0))
+
+        # 타이틀/카드가 있는 왼쪽과 아래쪽만 살짝 눌러서 텍스트가 뜨지 않게 함.
+        left_shade = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+        for x in range(self.width):
+            t = x / max(1, self.width - 1)
+            a = int(42 * ((1 - t) ** 2.2))
+            pygame.draw.line(left_shade, (0, 0, 0, a), (x, 0), (x, self.height))
+        bg.blit(left_shade, (0, 0))
+
+        bottom_shade = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+        for y in range(self.height):
+            t = y / max(1, self.height - 1)
+            a = int(58 * (t ** 2.0))
+            pygame.draw.line(bottom_shade, (0, 2, 10, a), (0, y), (self.width, y))
+        bg.blit(bottom_shade, (0, 0))
+
+        # 아주 약한 vignette. 화면 가장자리만 정리하고, 중앙 배경은 보존한다.
+        vignette = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+        cx, cy = self.width * 0.50, self.height * 0.48
+        max_d = math.hypot(max(cx, self.width - cx), max(cy, self.height - cy))
+        step = 5
+        for y in range(0, self.height, step):
+            for x in range(0, self.width, step):
+                d = math.hypot(x + step / 2 - cx, y + step / 2 - cy) / max_d
+                a = int(48 * max(0.0, d - 0.45) ** 1.8)
+                if a > 0:
+                    pygame.draw.rect(vignette, (0, 0, 0, a), (x, y, step, step))
+        bg.blit(vignette, (0, 0))
+        return bg.convert()
+
     def gradient_fill(self, screen, color_top, color_bottom):
         w, h = screen.get_size()
         # 고정 배경 외엔 작은 영역에만 사용됨 → 여전히 빠름
@@ -413,24 +607,33 @@ class PlayCoreMenu(ScreenObject):
 
     # -------------------------- Precompute tiles ----------------------------
     def _precompute_tile_assets(self):
-        """타일 크기 및 hover 크기별로 패턴/그라디언트 등을 프리컴퓨트."""
+        """타일 크기 및 hover 크기별로 이미지/패턴/그라디언트 등을 프리컴퓨트."""
         for i, base in enumerate(self.tile_rects):
-            radius = 24 if i == 0 else 20
-            for scale in (1.0, 1.05):
+            tile = self.tiles[i]
+            radius = 26 if i == 0 else 22
+            for scale in (1.0, 1.025):
                 w = int(base.w * scale)
                 h = int(base.h * scale)
                 key = (i, w, h)
                 if key in self._tile_assets:
                     continue
-                # gap은 원 코드와 동일 계산식
-                gap = max(16, int(w * PATTERN_GAP_K))
+
+                visual = self._tile_visual_cache.get(
+                    tile.get("image"),
+                    w,
+                    h,
+                    radius,
+                    tile.get("fallback_color", MODERN_PANEL),
+                )
+
+                gap = max(18, int(w * PATTERN_GAP_K))
                 frames = self._pattern_frames_cache.build_frames(
                     w, h, radius, gap, PATTERN_ANGLE, PATTERN_ALPHA, PATTERN_FRAMES
                 )
                 grad_overlay = self._grad_overlay_cache.get(w, h, radius)
-                # 그림자/마스크는 캐시에 이미 포함
                 self._tile_assets[key] = {
                     "radius": radius,
+                    "visual": visual,
                     "frames": frames,
                     "grad": grad_overlay,
                 }
@@ -445,8 +648,8 @@ class PlayCoreMenu(ScreenObject):
         track_y = int(self.height * 0.90)
 
         bar = pygame.Surface((track_w, track_h), pygame.SRCALPHA)
-        TRACK_RGBA = (255, 255, 255, 24)
-        KNOB_RGBA  = (220, 230, 240, 110)
+        TRACK_RGBA = (210, 225, 245, 16)
+        KNOB_RGBA  = (145, 170, 210, 125)
         pygame.draw.rect(bar, TRACK_RGBA, (0, 0, track_w, track_h), border_radius=track_h//2)
 
         content_w = getattr(self, "content_width", self.max_scroll_x + self.width)
@@ -463,8 +666,6 @@ class PlayCoreMenu(ScreenObject):
         mouse = pygame.mouse.get_pos()
         self.hovered_tile_index = None
 
-        time_s = pygame.time.get_ticks() / 1000.0
-
         view_l = self.scroll_x - 100
         view_r = self.scroll_x + self.width + 100
 
@@ -476,46 +677,47 @@ class PlayCoreMenu(ScreenObject):
             rect = base.move(-int(self.scroll_x), 0)
             hovered = (self.modal is None) and rect.collidepoint(mouse)
             if hovered:
-                w = int(rect.w * 1.05); h = int(rect.h * 1.05)
+                # 너무 튀는 확대감 제거. 약간만 커지게 함.
+                w = int(rect.w * 1.025); h = int(rect.h * 1.025)
                 rect = pygame.Rect(0, 0, w, h).move(rect.centerx - w//2, rect.centery - h//2)
 
-            radius = 24 if i == 0 else 20
-
-            # 그림자
-            screen.blit(self._tile_shadow(rect, radius), (rect.x-9, rect.y-6))
-
-            # 카드 본체 (캐시)
-            body = self._card_body_cache.get(rect.w, rect.h, radius, tile["color"], alpha=228)
-            screen.blit(body, rect.topleft)
-
-            # 패턴 프레임 (캐시)
             key = (i, rect.w, rect.h)
-            frames: List[pygame.Surface] = self._tile_assets[key]["frames"]
-            meta = self.tile_anim_meta[i]
-            phase = time_s * PATTERN_SPEED * meta["speed"] + meta["phase0"]
-            idx = int((phase % 1.0) * PATTERN_FRAMES) % PATTERN_FRAMES
-            screen.blit(frames[idx], rect.topleft)
+            assets = self._tile_assets[key]
+            radius = assets["radius"]
 
-            # 상단 옅은 그라디언트 (캐시)
-            grad = self._tile_assets[key]["grad"]
+            # 버튼 주변 그림자/글로우 제거. 배경 이미지와 겹칠 때 지저분해 보이지 않게
+            # 카드 자체만 깔끔하게 그림.
+
+            # 이미지 버튼 본체. 이미지가 없으면 fallback_color 단색 배경.
+            visual: pygame.Surface = assets["visual"]
+            screen.blit(visual, rect.topleft)
+
+            # 상단 유리광만 아주 약하게. 줄무늬/네온/화살표는 제거.
+            grad = assets["grad"]
             screen.blit(grad, rect.topleft)
 
-            # (선택) SHINE
-            if SHINE_ENABLED:
-                overlay = pygame.Surface((rect.w, rect.h), pygame.SRCALPHA)
-                local_t = (math.sin((time_s + meta["phase0"]*2.7) * 0.9) * 0.5) + 0.5
-                self._shine(overlay, local_t)
-                self._apply_round_mask(overlay, radius)
-                screen.blit(overlay, rect.topleft)
-
-            # 텍스트
-            title_surf = self._tile_title_surf[i]
-            title_rect = title_surf.get_rect(center=rect.center)
-            screen.blit(title_surf, title_rect)
-
+            # Hover는 글로우 없이 얇은 테두리만 표시.
             if hovered:
-                pygame.draw.rect(screen, (255, 255, 255), rect, width=2, border_radius=radius)
+                pygame.draw.rect(screen, (170, 190, 220), rect, width=2, border_radius=radius)
                 self.hovered_tile_index = i
+
+            # 텍스트: 이미지 버튼 하단 라벨.
+            pad_x = max(16, rect.w // 16)
+            pad_y = max(14, rect.h // 10)
+
+            eyebrow_surf = self._tile_eyebrow_surf[i]
+            title_surf = self._tile_title_surf[i]
+
+            eyebrow_rect = eyebrow_surf.get_rect(
+                left=rect.left + pad_x,
+                bottom=rect.bottom - pad_y - title_surf.get_height() + 2
+            )
+            title_rect = title_surf.get_rect(
+                left=rect.left + pad_x,
+                bottom=rect.bottom - pad_y
+            )
+            screen.blit(eyebrow_surf, eyebrow_rect)
+            screen.blit(title_surf, title_rect)
 
         # 상단 타이틀
         screen.blit(self.title_text_surface, self.title_text_pos)
@@ -654,8 +856,7 @@ class PlayCoreMenu(ScreenObject):
             dt = dt_ms / 1000.0
 
             self.frame_count += 1
-            if self.frame_count % self.spawn_rate == 0:
-                self.spawn_squares()
+            # clean 버전: 배경 장식 애니메이션은 사용하지 않음.
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -721,8 +922,6 @@ class PlayCoreMenu(ScreenObject):
 
             # Background (프리렌더된 그라디언트 사용)
             screen.blit(self._bg, (0, 0))
-            self.update_squares(dt)
-            self.draw_squares(screen)
 
             # Tiles (+ 모달)
             self.draw_tiles(screen)
@@ -742,7 +941,7 @@ if __name__ == "__main__":
     except TypeError:
         # pygame < 2.0 또는 플랫폼 미지원 시 폴백
         screen = pygame.display.set_mode((WIDTH, HEIGHT))
-    pygame.display.set_caption("PlayCoreMenu — Modal & Tight Bottom Row (Optimized)")
+    pygame.display.set_caption("PlayCoreMenu — Nebula Image Cards")
 
     menu_screen = PlayCoreMenu(WIDTH, HEIGHT, show_fps=True)
     print(menu_screen.loop(screen))
