@@ -376,19 +376,19 @@ class PlayCoreMenu(ScreenObject):
                 "title": "Lynez",
                 "image": "data/menu/lynez.png",
                 "fallback_color": (28, 38, 55),
-                "eyebrow": "Puzzle"
+                "eyebrow": "DaFluffyPotato"
             },
             {
                 "title": "Magic Cat Academy",
                 "image": "data/menu/magic_cat_academy.png",
                 "fallback_color": (34, 33, 50),
-                "eyebrow": "Arcade"
+                "eyebrow": "Doodles"
             },
             {
                 "title": "Airship",
                 "image": "data/menu/airship.png",
                 "fallback_color": (24, 42, 52),
-                "eyebrow": "Action"
+                "eyebrow": "Blob8108"
             }
         ]
         # dummies = [{
