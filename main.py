@@ -7,7 +7,7 @@ import PlayCore
 
 def main():
     pygame.init()
-    WIDTH, HEIGHT = 1280, 720   
+    WIDTH, HEIGHT = 1280, 880   
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     pygame.display.set_caption("DSHS PlayCore")
     
